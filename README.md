@@ -16,6 +16,12 @@
 
 A cross-platform desktop edition is now available in the [desktop folder](desktop/). It uses Python + PyQt6 and includes the same 12 utilities in a native GUI for **Windows, macOS, and Linux**.
 
+### Desktop GUI preview
+
+![Smart Toolbox PyQt6 desktop GUI preview](desktop/assets/smart-toolbox-gui.svg)
+
+*Illustrative interface concept showing the planned desktop layout and tool dashboard; it is a design preview, not a screenshot of the running app.*
+
 Quick start in powershell:
 
 ```bash
