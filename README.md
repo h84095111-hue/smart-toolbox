@@ -64,10 +64,6 @@ Tool-specific walkthroughs and troubleshooting are in [`docs/USAGE.md`](docs/USA
 
 The banner above is product artwork, not a screenshot of the running interface.
 
-## 🎬 Video walkthrough
-
-A real screen-recorded walkthrough is not included in this source release yet. The repository includes a step-by-step recording plan in [`docs/VIDEO-GUIDE.md`](docs/VIDEO-GUIDE.md), so a contributor can record the actual running app rather than presenting a mockup as a product demo.
-
 ## 🔒 Privacy and security
 
 - Utility processing happens in your browser; the app has no application server or account system.
