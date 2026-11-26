@@ -16,7 +16,7 @@
 
 A cross-platform desktop edition is now available in the [desktop folder](desktop/). It uses Python + PyQt6 and includes the same 12 utilities in a native GUI for **Windows, macOS, and Linux**.
 
-Quick start:
+Quick start in powershell:
 
 ```bash
 cd desktop
