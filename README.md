@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/assets/smart-toolbox-hero.png" alt="Smart Toolbox Pro — everyday utilities in one workspace" width="100%" />
+  <img src="docs/assets/smart-toolbox-hero.svg" alt="Smart Toolbox Pro — everyday utilities in one workspace" width="100%" />
 
   <h1>Smart Toolbox</h1>
   <p><strong>Everyday utilities. One beautiful workspace.</strong></p>
