@@ -23,7 +23,7 @@ def _finding(title,data,source,url="",confidence="Medium"):
 def certificate_transparency(domain):
     domain=domain.strip().lower().lstrip("*.")
     if not domain or "/" in domain or " " in domain: raise ValueError("Enter a domain only")
-    url="https://crt.sh/"; rows=_get(url,{"q":"%25."+domain,"output":"json"}).json(); names=set()
+    url="https://crt.sh/"; rows=_get(url,{"q":"%."+domain,"output":"json"}).json(); names=set()
     for row in rows[:5000]:
         for n in row.get("name_value","").splitlines():
             n=n.strip().lower().lstrip("*.")
@@ -59,14 +59,24 @@ def otx_domain(domain):
     key=_need("otx"); url="https://otx.alienvault.com/api/v1/indicators/domain/"+quote(domain,safe="")+"/general"
     d=_get(url,headers={"X-OTX-API-KEY":key}).json()
     return _finding("AlienVault OTX domain pulses",{"pulse_info":d.get("pulse_info"),"validation":d.get("validation")},"AlienVault OTX API",url)
+def _public_ip(ip):
+    import ipaddress
+    address=ipaddress.ip_address(ip.strip())
+    if not address.is_global: raise ValueError("Only globally routable public IP addresses are supported")
+    return str(address)
 def shodan_host(ip):
-    key=_need("shodan"); url="https://api.shodan.io/shodan/host/"+quote(ip,safe="")
+    ip=_public_ip(ip); key=_need("shodan"); url="https://api.shodan.io/shodan/host/"+quote(ip,safe="")
     d=_get(url,{"key":key}).json()
-    return _finding("Shodan existing host intelligence",{k:d.get(k) for k in ("ip_str","org","isp","asn","country_name","last_update","tags","vulns","ports","hostnames","domains")},"Shodan API (existing observations)",url)
+    # Deliberately omit port/service/vulnerability fingerprint fields.
+    return _finding("Shodan existing host metadata",{k:d.get(k) for k in ("ip_str","org","isp","asn","country_name","last_update","tags")},"Shodan API (existing observations)",url)
 def censys_host(ip):
-    key=_need("censys"); url="https://api.platform.censys.io/v3/global/asset/host/"+quote(ip,safe="")
+    ip=_public_ip(ip); key=_need("censys"); url="https://api.platform.censys.io/v3/global/asset/host/"+quote(ip,safe="")
     d=_get(url,headers={"Authorization":"Bearer "+key}).json()
-    return _finding("Censys existing host intelligence",d,"Censys API (existing observations)",url)
+    # Keep only coarse host/ownership metadata; exclude services and port fingerprints.
+    root=d.get("result",d)
+    allowed=("ip","last_updated_at","location","autonomous_system","labels","resource")
+    summary={k:root.get(k) for k in allowed if k in root and k!="resource"}
+    return _finding("Censys existing host metadata",summary,"Censys API (existing observations)",url)
 def passive_dns_history(domain):
     key=_need("securitytrails"); url="https://api.securitytrails.com/v1/history/"+quote(domain,safe="")+"/dns/a"
     return _finding("Passive DNS history",_get(url,headers={"APIKEY":key}).json(),"SecurityTrails API",url)
