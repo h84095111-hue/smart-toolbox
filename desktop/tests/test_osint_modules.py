@@ -120,5 +120,5 @@ def test_stix_note_content_uses_real_newlines(tmp_path):
     export_stix([{"title":"Finding","source":"Unit test","url":"https://example.org","confidence":"High","content":"Body text"}],path)
     bundle=json.loads(path.read_text(encoding="utf-8"))
     note=next(obj for obj in bundle["objects"] if obj["type"]=="note")
-    assert "\\n" not in note["content"]
+    assert r"\\n" not in note["content"]
     assert "\nSource: Unit test\nURL: https://example.org" in note["content"]
