@@ -21,7 +21,7 @@ def export_stix(evidence,path,case_name="Smart Intel case"):
             if clean: candidates.append(("url",clean))
         for match in re.findall(r"(?i)\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}\b", source_url+" "+content):
             candidates.append(("domain",match.lower().rstrip(".")))
-        for match in re.findall(r"\b(?:\\d{1,3}\.){3}\\d{1,3}\b", source_url+" "+content):
+        for match in re.findall(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", source_url+" "+content):
             try:
                 if ipaddress.ip_address(match).is_global: candidates.append(("ipv4",match))
             except ValueError: pass
