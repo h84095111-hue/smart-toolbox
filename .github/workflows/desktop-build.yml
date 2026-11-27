@@ -1,10 +1,8 @@
-name: PyQt6 desktop builds
+name: Smart Intel desktop builds
 on:
   workflow_dispatch:
   push:
-    paths:
-      - 'desktop/**'
-      - '.github/workflows/desktop-build.yml'
+    paths: ['desktop/**', '.github/workflows/desktop-build.yml']
 jobs:
   package:
     strategy:
@@ -28,12 +26,12 @@ jobs:
           python-version: '3.11'
       - run: python -m pip install -r requirements-dev.txt
       - if: runner.os == 'Windows'
-        run: pyinstaller --noconfirm --clean --windowed --name SmartToolbox --collect-all qrcode main.py
+        run: pyinstaller --noconfirm --clean --windowed --name SmartIntel main.py
       - if: runner.os == 'macOS'
-        run: pyinstaller --noconfirm --clean --windowed --name SmartToolbox --collect-all qrcode main.py
+        run: pyinstaller --noconfirm --clean --windowed --name SmartIntel main.py
       - if: runner.os == 'Linux'
-        run: pyinstaller --noconfirm --clean --name SmartToolbox --collect-all qrcode main.py
+        run: pyinstaller --noconfirm --clean --name SmartIntel main.py
       - uses: actions/upload-artifact@v4
         with:
-          name: SmartToolbox-${{ matrix.target }}
+          name: SmartIntel-${{ matrix.target }}
           path: desktop/dist/
