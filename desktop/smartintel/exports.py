@@ -1,6 +1,5 @@
 """JSON, CSV, STIX 2.1 note-bundle and DOCX export helpers."""
 import csv,json,uuid,re,ipaddress
-from urllib.parse import urlparse
 from pathlib import Path
 from datetime import datetime,timezone
 def export_json(case,evidence,path):
@@ -17,12 +16,12 @@ def export_stix(evidence,path,case_name="Smart Intel case"):
         content=str(item.get("content","")); source_url=str(item.get("url",""))
         objects.append({"type":"note","spec_version":"2.1","id":"note--"+str(uuid.uuid4()),"created":now,"modified":now,"content":f"{item.get('title','Finding')}\\nSource: {item.get('source','')}\\nURL: {source_url}\\nConfidence: {item.get('confidence','Unknown')}\\n\\n{content}","abstract":item.get("title","OSINT observation"),"authors":["Smart Intel analyst"],"object_refs":[identity["id"]]})
         candidates=[]
-        for match in re.findall(r"https?://[^\\s<>\\\"']+", source_url+" "+content):
+        for match in re.findall(r"https?://[^\s<>\\"']+", source_url+" "+content):
             clean=match.rstrip(".,);]")
             if clean: candidates.append(("url",clean))
-        for match in re.findall(r"(?i)\\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,}\\b", source_url+" "+content):
+        for match in re.findall(r"(?i)\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}\b", source_url+" "+content):
             candidates.append(("domain",match.lower().rstrip(".")))
-        for match in re.findall(r"\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b", source_url+" "+content):
+        for match in re.findall(r"\b(?:\\d{1,3}\.){3}\\d{1,3}\b", source_url+" "+content):
             try:
                 if ipaddress.ip_address(match).is_global: candidates.append(("ipv4",match))
             except ValueError: pass
