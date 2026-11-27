@@ -26,8 +26,8 @@ def risk_score(indicators):
     return {"score":score,"band":band,"reasons":reasons,"caveat":"Heuristic triage only. No findings does not mean safe; verify context and freshness."}
 def entity_edges(text,source="evidence"):
     import ipaddress
-    domains=set(re.findall(r"(?i)\\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,}\\b",text))
-    ips=set(re.findall(r"\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b",text)); urls=set(re.findall(r"https?://[^\\s\\]\\[<>\\\"']+",text)); nodes=[]
+    domains=set(re.findall(r"(?i)\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}\b",text))
+    ips=set(re.findall(r"\b(?:\d{1,3}\.){3}\d{1,3}\b",text)); urls=set(re.findall(r"https?://[^\s\\]\\[<>\\\"']+",text)); nodes=[]
     nodes += [{"type":"domain","value":x.lower().rstrip("."),"source":source} for x in sorted(domains)]
     for ip in sorted(ips):
         try:
