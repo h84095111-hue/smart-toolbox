@@ -1,39 +1,57 @@
-# Installation guide
+# Smart Intel installation
 
-## Option A — run from source (recommended for development)
+Smart Intel is a native Python/PyQt6 desktop application. The old Node/Vite browser-toolbox instructions no longer apply.
 
-1. Install Node.js 18.18+ from <https://nodejs.org/>. npm is included with Node.js.
-2. Download this repository as a ZIP from GitHub and extract it, or clone it:
-   ```bash
-   git clone https://github.com/h84095111-hue/smart-toolbox.git
-   cd smart-toolbox
-   ```
-3. Open a terminal in the project directory.
-4. Install packages:
-   ```bash
-   npm install
-   ```
-5. Start the local development server:
-   ```bash
-   npm run dev
-   ```
-6. Open the URL Vite prints, usually <http://localhost:5173>.
+## Requirements
 
-Stop the server with `Ctrl+C` in the terminal.
+- Python 3.10 or newer
+- Windows 10/11, recent macOS, or a supported Linux desktop
+- Internet access for public-source lookups and AI APIs
+- API keys only for the optional paid/provider integrations you choose
 
-## Option B — build a deployable website
+## Run from source
 
 ```bash
-npm install
-npm run build
+git clone https://github.com/h84095111-hue/smart-toolbox.git
+cd smart-toolbox/desktop
+python -m venv .venv
 ```
 
-Upload the generated `dist/` directory to a static hosting provider. No database, API key, or backend server is required for the current toolset.
+Activate the environment:
+
+- Windows PowerShell: `.venv\\Scripts\\Activate.ps1`
+- macOS/Linux: `source .venv/bin/activate`
+
+Then:
+
+```bash
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python main.py
+```
+
+The app creates its local data directory at `~/.smart-intel/data/`.
+
+## API keys
+
+Open **AI provider settings** inside the app. AI keys and supported OSINT provider keys are stored using the operating-system credential store via keyring. Some providers require an account, paid plan or specific API entitlement. Do not paste keys into source files or commit them to Git.
+
+Supported source connectors include crt.sh, Wayback CDX and GDELT without a key, and VirusTotal, AbuseIPDB, OTX, Shodan, Censys, SecurityTrails and MISP with configured credentials. See [SOURCES.md](osint/SOURCES.md).
+
+## Run tests
+
+```bash
+python -m pip install -r requirements-dev.txt
+python -m pytest -q
+```
+
+## Build locally
+
+Use the scripts in `desktop/` and build on the target OS. See [desktop/BUILDING.md](../desktop/BUILDING.md). PyInstaller is not a cross-compiler. macOS signing/notarization and a Windows installer are not yet included.
 
 ## Troubleshooting
 
-- **`node` or `npm` not found:** close and reopen the terminal after installing Node.js; check `node --version` and `npm --version`.
-- **Port 5173 is busy:** Vite normally offers another available local port in the terminal output.
-- **Dependency install fails:** check your internet connection and retry `npm install`.
-- **Clipboard access is blocked:** use the app on `localhost` or a secure HTTPS site and grant clipboard permission if your browser asks.
-- **QR download does not start:** allow downloads for the site in your browser.
+- If keyring is unavailable in a headless Linux session, configure a supported desktop secret service or use provider environment variables where supported.
+- If a provider returns 401/403, check the API key, account plan, endpoint version and provider quota.
+- Network lookups can fail due to provider rate limits, DNS, TLS inspection or regional restrictions.
+- Do not disable TLS verification to work around certificate errors.
