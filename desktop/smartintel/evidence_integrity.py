@@ -10,6 +10,8 @@ def sha256_file(path):
 def append_audit(journal,event):
     p=Path(journal); p.parent.mkdir(parents=True,exist_ok=True); previous="0"*64
     if p.exists():
+        valid,count=verify_audit(p)
+        if not valid: raise ValueError(f"Audit journal is invalid after {count} verified entries; refusing to append.")
         lines=[x for x in p.read_text(encoding="utf-8").splitlines() if x.strip()]
         if lines: previous=json.loads(lines[-1])["entry_hash"]
     body={"timestamp":datetime.now(timezone.utc).isoformat(),"previous_hash":previous,"event":event}
@@ -21,11 +23,14 @@ def verify_audit(journal):
     if not p.exists(): return True,0
     for line in p.read_text(encoding="utf-8").splitlines():
         if not line.strip(): continue
-        item=json.loads(line); claimed=item.pop("entry_hash",None)
-        if item.get("previous_hash")!=previous: return False,count
-        actual=hashlib.sha256(json.dumps(item,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()).hexdigest()
-        if claimed!=actual: return False,count
-        previous=claimed; count+=1
+        try:
+            item=json.loads(line); claimed=item.pop("entry_hash",None)
+            if item.get("previous_hash")!=previous: return False,count
+            actual=hashlib.sha256(json.dumps(item,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()).hexdigest()
+            if claimed!=actual: return False,count
+            previous=claimed; count+=1
+        except (ValueError,TypeError,KeyError,AttributeError):
+            return False,count
     return True,count
 def generate_encryption_key():
     from cryptography.fernet import Fernet
