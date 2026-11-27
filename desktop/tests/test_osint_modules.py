@@ -32,3 +32,24 @@ def test_exports(tmp_path):
     export_stix(evidence,str(tmp_path/"x.stix.json"))
     assert json.loads((tmp_path/"x.json").read_text())["evidence"][0]["title"]=="Example"
     assert json.loads((tmp_path/"x.stix.json").read_text())["objects"][1]["type"]=="note"
+
+def test_username_lookup_is_reference_only():
+    from smartintel.collectors.passive_sources import public_username_reference
+    result=public_username_reference("@example_user")
+    payload=json.loads(result["content"])
+    assert result["confidence"]=="Low"
+    assert "github.com/example_user" in payload["links"]["GitHub"]
+    assert "not verified" in payload["note"]
+
+def test_breach_workflow_does_not_fetch_leaked_data():
+    from smartintel.collectors.passive_sources import breach_check_guidance
+    result=breach_check_guidance("security@example.org")
+    payload=json.loads(result["content"])
+    assert payload["status"]=="Not queried"
+    assert "does not retrieve" in payload["privacy"]
+
+def test_provider_ip_lookup_rejects_private_targets():
+    from smartintel.collectors.passive_sources import _public_ip
+    import pytest
+    with pytest.raises(ValueError):
+        _public_ip("192.168.1.10")
