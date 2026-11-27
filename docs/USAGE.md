@@ -1,60 +1,36 @@
-# User guide
+# Smart Intel user guide
 
-## General workflow
+## Investigation workflow
 
-Select a utility from the tool cards. You can search by tool name, description, or category. Enter your content in the workspace, run the action, then copy or download the result.
+1. Start Smart Intel and create an investigation case.
+2. Use **Collect** for the built-in domain, public-IP and website lookups.
+3. Use **OSINT Sources** for certificate transparency, Wayback, threat-intelligence providers, passive DNS history, news and MISP exact-IOC searches.
+4. Add useful findings to the active case.
+5. Review the **Evidence & Timeline** table. Each row records source, URL, observation time and confidence.
+6. Use **AI Analyst** to summarize the evidence. The selected provider receives the evidence text; only send material you are authorized to disclose.
+7. Export the case as HTML. JSON, CSV, STIX and DOCX export helpers are also available to Python integrations.
 
-## Password generator
+## Provider keys
 
-1. Choose a length from 8 to 64 characters.
-2. Enable at least one character group: uppercase, lowercase, numbers, or symbols.
-3. Select **Generate password**.
-4. Use the copy icon to copy the generated value.
+Open **AI provider settings** and enter only the provider keys you intend to use. Keys are saved through keyring. API calls may incur third-party charges. Never commit keys to GitHub.
 
-The generator uses the browser's cryptographic random number generator. Do not share generated passwords or store them in public documents.
+## OSINT Sources panel
 
-## QR code generator
+Choose a source, enter a domain, public IP, URL, username or IOC, and run the lookup. The result is displayed before you add it to the case. MISP requires an HTTPS instance URL and a configured API key.
 
-1. Enter a URL or text.
-2. Preview the generated QR code.
-3. Select **Download PNG** and scan the image with a phone camera to test it.
+- crt.sh: historical certificate names; not proof that a hostname is live.
+- Wayback: archived public page captures; archives can be incomplete or stale.
+- VirusTotal, AbuseIPDB, OTX, Shodan and Censys: provider-reported intelligence, not ground truth.
+- Shodan/Censys: queries existing indexed observations only; no scan is initiated.
+- SecurityTrails: passive DNS history, subject to API entitlement.
+- GDELT: public news references; reporting is secondary-source material.
+- Username reference links: starting points only; they do not verify identity or account ownership.
+- Breach workflow: points to verified-domain/authorized notification services; it does not query stolen credential dumps.
 
-## JSON formatter
+## Evidence quality
 
-Paste valid JSON into the input area. Choose **Format JSON** for readable indentation or **Minify** to remove unnecessary whitespace. Invalid JSON displays a parsing error.
+Keep original URLs, timestamps and source names. Treat provider labels and risk scores as leads. Corroborate important claims independently. Distinguish direct observations from inference and record uncertainty.
 
-## Base64 converter
+## Current limitations
 
-Paste UTF-8 text and choose **Encode** to create Base64, or paste Base64 and choose **Decode** to recover the text. Base64 is an encoding format, not encryption.
-
-## URL encoder / decoder
-
-Use **Encode** to safely encode a URL component, or **Decode** to decode a percent-encoded value. This tool operates on a component, not a full URL parser.
-
-## SHA-256
-
-Enter text and select **Generate SHA-256**. The output is a hexadecimal digest. Hashing is one-way; it is not a way to encrypt text and decrypt it later.
-
-## Text toolkit
-
-Paste or type text to see word, character, and line counts. Use the case buttons to transform text or **Clean spaces** to collapse repeated whitespace.
-
-## Unit converter
-
-Choose length, weight, or temperature. Enter a value, select the source and destination units, and read the converted value.
-
-## UUID generator
-
-Select **Generate UUID** to create a version-4 UUID using `crypto.randomUUID()`. Use the copy control to copy it.
-
-## Color converter
-
-Choose a color with the picker. The tool displays HEX, RGB, and HSL values; copy the result block to use them elsewhere.
-
-## Timestamp converter
-
-Enter a Unix timestamp in seconds. The tool displays the corresponding UTC ISO date and your browser's localized date representation.
-
-## Markdown helper
-
-Write headings, paragraphs, simple bullet lines, and bold or italic text. The preview shows the supported basic formatting. This is a lightweight preview, not a complete CommonMark renderer.
+The timeline is a table, not a visual timeline. Entity extraction and scoring are helper functions, not a full interactive graph. WARC capture, screenshot capture, attachment import, encrypted case database, signature verification UI, team collaboration, scheduled monitoring and SIEM/SOAR integrations are not yet implemented.
