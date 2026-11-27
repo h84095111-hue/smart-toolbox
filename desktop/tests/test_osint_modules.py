@@ -53,3 +53,10 @@ def test_provider_ip_lookup_rejects_private_targets():
     import pytest
     with pytest.raises(ValueError):
         _public_ip("192.168.1.10")
+
+def test_pdf_export(tmp_path):
+    from smartintel.exports import export_pdf
+    item=[{"title":"PDF check","source":"test","content":"evidence"}]
+    path=tmp_path/"report.pdf"
+    export_pdf("test case",item,str(path))
+    assert path.exists() and path.stat().st_size > 100
