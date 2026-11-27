@@ -24,3 +24,22 @@ def export_docx(case_name,evidence,path):
         if item.get("url"): doc.add_paragraph(item["url"])
         doc.add_paragraph(item.get("content",""))
     doc.save(path)
+
+def export_pdf(case_name,evidence,path):
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Preformatted, PageBreak
+    from xml.sax.saxutils import escape
+    doc=SimpleDocTemplate(path,pagesize=A4,rightMargin=18*mm,leftMargin=18*mm,topMargin=18*mm,bottomMargin=18*mm)
+    styles=getSampleStyleSheet()
+    styles.add(ParagraphStyle(name="EvidenceBody",parent=styles["BodyText"],fontName="Courier",fontSize=7,leading=9,wordWrap="CJK"))
+    story=[Paragraph("Smart Intel — "+escape(case_name),styles["Title"]),Paragraph("Evidence items: "+str(len(evidence)),styles["Normal"]),Spacer(1,8*mm)]
+    for item in evidence:
+        story.append(Paragraph(escape(item.get("title","Finding")),styles["Heading2"]))
+        meta="Source: "+item.get("source","")+" | Confidence: "+item.get("confidence","Unknown")+" | Observed: "+item.get("observed_at","")
+        story.append(Paragraph(escape(meta),styles["Normal"]))
+        if item.get("url"): story.append(Paragraph(escape(item["url"]),styles["Normal"]))
+        story.append(Preformatted(item.get("content",""),styles["EvidenceBody"])); story.append(Spacer(1,5*mm))
+    doc.build(story)
