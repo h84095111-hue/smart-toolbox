@@ -11,18 +11,41 @@ from .integrations_panel import IntegrationsPanel
 from .evidence_integrity import append_audit
 from .config import APP_DIR
 
-STYLE="""QWidget{background:#0b1220;color:#e6edf8;font-family:Segoe UI,Arial;font-size:13px}
-QFrame#sidebar{background:#101a2c;border-right:1px solid #283852}
-QLabel#brand{font-size:22px;font-weight:800;padding:10px;color:#fff}
-QLabel#muted{color:#94a4bd} QLabel#heading{font-size:25px;font-weight:800;color:#fff}
-QLabel#eyebrow{color:#9d91ff;font-size:11px;font-weight:800;letter-spacing:2px}
-QPushButton{background:#1c2a42;border:1px solid #334661;border-radius:8px;padding:10px;text-align:left}
-QPushButton:hover{background:#283958;border-color:#8176ff}
-QPushButton#primary{background:#6558df;border:1px solid #897fff;color:#fff;font-weight:700}
-QLineEdit,QTextEdit,QPlainTextEdit,QComboBox,QListWidget{background:#0e192b;border:1px solid #30415e;border-radius:7px;padding:9px}
-QTableWidget{background:#0e192b;border:1px solid #30415e;gridline-color:#273750}
-QHeaderView::section{background:#18263d;color:#aebbd0;padding:8px;border:0}
-QTabBar::tab{background:#142138;padding:10px 16px} QTabBar::tab:selected{background:#5148a6}"""
+STYLE="""QWidget{background:#0a1020;color:#e7ecf7;font-family:Segoe UI,Inter,Arial;font-size:13px;selection-background-color:#6558df;selection-color:#fff}
+QMainWindow,QDialog{background:#0a1020}
+QFrame#sidebar{background:#0d1729;border-right:1px solid #202e48}
+QLabel#brand{font-size:22px;font-weight:900;padding:10px;color:#fff;letter-spacing:1px}
+QLabel#muted{color:#91a2bd} QLabel#heading{font-size:26px;font-weight:850;color:#fff}
+QLabel#eyebrow{color:#a99fff;font-size:10px;font-weight:900;letter-spacing:2px}
+QPushButton{background:#17243a;border:1px solid #2b3c59;border-radius:9px;padding:10px 13px;text-align:left;color:#e8edfa}
+QPushButton:hover{background:#223452;border-color:#786dff}
+QPushButton:pressed{background:#302b68}
+QPushButton:disabled{color:#68758c;background:#111b2b;border-color:#202c40}
+QPushButton#primary{background:#6256dc;border:1px solid #8a80ff;color:#fff;font-weight:800}
+QPushButton#primary:hover{background:#7669f0;border-color:#aaa2ff}
+QLineEdit,QTextEdit,QPlainTextEdit,QComboBox,QListWidget,QTextBrowser{background:#0d192b;border:1px solid #2a3b59;border-radius:8px;padding:9px;color:#e7ecf7}
+QLineEdit:focus,QTextEdit:focus,QPlainTextEdit:focus,QComboBox:focus{border:1px solid #8579ff}
+QComboBox::drop-down{border:0;width:24px}
+QComboBox QAbstractItemView{background:#111e32;color:#e7ecf7;selection-background-color:#4e4798;border:1px solid #344766}
+QListWidget::item{padding:8px;border-radius:6px}
+QListWidget::item:selected{background:#29275a;color:#fff}
+QTableWidget{background:#0d192b;border:1px solid #2a3b59;gridline-color:#202f48;alternate-background-color:#111f34;color:#e7ecf7;selection-background-color:#35316e}
+QTableWidget::item{padding:7px}
+QHeaderView::section{background:#15243a;color:#aebbd0;padding:10px;border:0;border-right:1px solid #253650;font-weight:700}
+QTabWidget::pane{border:1px solid #253650;border-radius:10px;background:#0c1728;top:-1px}
+QTabBar::tab{background:#111e32;color:#91a2bd;padding:11px 17px;margin-right:4px;border-top-left-radius:7px;border-top-right-radius:7px}
+QTabBar::tab:hover{background:#1c2b45;color:#fff}
+QTabBar::tab:selected{background:#302d69;color:#fff;font-weight:800;border-bottom:2px solid #9b91ff}
+QScrollBar:vertical{background:#0d1728;width:10px;margin:0;border:0}
+QScrollBar::handle:vertical{background:#344563;min-height:25px;border-radius:5px}
+QScrollBar::handle:vertical:hover{background:#6256dc}
+QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0}
+QToolTip{background:#1b2940;color:#fff;border:1px solid #485c7c;padding:5px}
+QMessageBox{background:#101c30}
+QCheckBox{spacing:8px;color:#dce5f5}
+QGroupBox{border:1px solid #2a3b59;border-radius:9px;margin-top:12px;padding:12px;font-weight:700}
+QGroupBox::title{subcontrol-origin:margin;left:12px;padding:0 5px;color:#aaa0ff}
+"""
 
 class Worker(QThread):
     done=pyqtSignal(object); failed=pyqtSignal(str)
@@ -64,7 +87,7 @@ class MainWindow(QMainWindow):
         self.case_list=QListWidget(); self.case_list.currentRowChanged.connect(self.case_selected); sv.addWidget(self.case_list,1)
         new=QPushButton("+  New investigation"); new.setObjectName("primary"); new.clicked.connect(self.new_case); sv.addWidget(new)
         self.nav=[]
-        for text,idx in [("⌕  Collect intelligence",0),("◉  Evidence & timeline",1),("⌘  AI analyst",2),("▤  Reports",3)]:
+        for text,idx in [("⌕  Collect intelligence",0),("◉  OSINT source hub",1),("▤  Evidence & timeline",2),("⌘  AI analyst",3),("▤  Reports",4)]:
             b=QPushButton(text); b.clicked.connect(lambda _,i=idx:self.tabs.setCurrentIndex(i)); sv.addWidget(b)
         settings=QPushButton("⚙  AI provider settings"); settings.clicked.connect(lambda:SettingsDialog(self).exec()); sv.addWidget(settings)
         privacy=QLabel("● PASSIVE PUBLIC-SOURCE MODE\nNo login attempts · No exploitation\nEvidence stored locally"); privacy.setStyleSheet("color:#8fe0bd;background:#142b30;border:1px solid #28534f;border-radius:8px;padding:12px;font-size:11px"); sv.addWidget(privacy)
@@ -83,9 +106,13 @@ class MainWindow(QMainWindow):
     def collect_tab(self):
         w=QWidget(); v=QVBoxLayout(w); intro=QLabel("Passive public-source collection. Select a target type and run a lookup."); intro.setObjectName("muted"); v.addWidget(intro)
         r=QHBoxLayout(); self.target_type=QComboBox(); self.target_type.addItems(["Domain","Public IP address","Website URL"]); self.target=QLineEdit(); self.target.setPlaceholderText("example.com"); r.addWidget(self.target_type); r.addWidget(self.target,1)
-        self.collect_btn=QPushButton("Collect evidence"); self.collect_btn.setObjectName("primary"); self.collect_btn.clicked.connect(self.collect); r.addWidget(self.collect_btn); v.addLayout(r)
+        self.collect_btn=QPushButton("Collect evidence"); self.collect_btn.setObjectName("primary"); self.collect_btn.clicked.connect(self.collect); r.addWidget(self.collect_btn); self.all_scan_btn=QPushButton("All-in-One scan"); self.all_scan_btn.clicked.connect(self.run_all_from_collect); r.addWidget(self.all_scan_btn); v.addLayout(r)
         self.collect_log=QPlainTextEdit(); self.collect_log.setReadOnly(True); self.collect_log.setPlaceholderText("Collection output appears here…"); v.addWidget(self.collect_log,1)
         hint=QLabel("DNS · RDAP · TLS certificate · public website metadata, headers and links. No active scanning."); hint.setObjectName("muted"); v.addWidget(hint); return w
+    def run_all_from_collect(self):
+        self.tabs.setCurrentIndex(1)
+        self.integrations.target.setText(self.target.text().strip())
+        self.integrations.run_all_sources()
     def integration_done(self, finding):
         if not self.require_case(): return
         item=Evidence(self.case_id,finding.get("source","Unknown"),finding.get("title","OSINT finding"),finding.get("url",""),finding.get("content",""),confidence=finding.get("confidence","Medium"),kind=finding.get("kind","Passive OSINT"))
