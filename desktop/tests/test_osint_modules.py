@@ -60,3 +60,25 @@ def test_pdf_export(tmp_path):
     path=tmp_path/"report.pdf"
     export_pdf("test case",item,str(path))
     assert path.exists() and path.stat().st_size > 100
+
+
+def test_all_in_one_scan_continues_and_normalizes_findings(monkeypatch):
+    from types import SimpleNamespace
+    from smartintel.collectors import all_in_one as scan
+    from smartintel.collectors import passive_sources as sources
+    monkeypatch.setattr(scan,"collect_domain",lambda domain:[SimpleNamespace(title="DNS",value="8.8.8.8",source="DNS",url="",confidence="High")])
+    monkeypatch.setattr(sources,"certificate_transparency",lambda domain: (_ for _ in ()).throw(RuntimeError("API key not configured")))
+    monkeypatch.setattr(sources,"wayback",lambda target: {"title":"Archive","content":"capture","source":"Wayback","url":"https://archive.org","confidence":"High"})
+    for name in ("virustotal_domain","urlscan_search","otx_domain","passive_dns_history","gdelt_news"):
+        monkeypatch.setattr(sources,name,lambda *args: (_ for _ in ()).throw(RuntimeError("API key not configured")))
+    result=scan.run_all("example.org")
+    assert result["findings"][0]["title"]=="DNS"
+    assert result["findings"][0]["content"]=="8.8.8.8"
+    assert any("Certificate transparency" in item for item in result["skipped"])
+    assert any(item["title"]=="Archive" for item in result["findings"])
+
+def test_all_in_one_scan_rejects_private_ip():
+    import pytest
+    from smartintel.collectors.all_in_one import run_all
+    with pytest.raises(ValueError):
+        run_all("192.168.1.1")
