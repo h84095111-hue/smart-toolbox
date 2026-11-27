@@ -35,7 +35,7 @@ Status reflects code in the current repository, not a marketing checklist.
 | Scheduled monitoring | Not implemented | Scheduler/alerting pending |
 | API/CLI/automation | Not implemented | Python helper modules only |
 | SIEM/SOAR/ticketing | Not implemented | Integrations pending |
-| PDF / Word / STIX / CSV / JSON | Partial | DOCX, STIX note bundle, CSV and JSON helpers; PDF pending |
+| PDF / Word / STIX / CSV / JSON | Partial | PDF, DOCX, STIX note bundle, CSV and JSON helpers; app export UI still needs wiring |
 | Branded templates | Not implemented | Template engine pending |
 | IOC sharing | Partial | STIX note bundle; typed STIX Indicator objects pending |
 | Test coverage | Expanded | Unit tests for storage, IP restrictions, audit, analysis and exports; provider network tests pending |
