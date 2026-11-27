@@ -14,7 +14,7 @@ def export_stix(evidence,path,case_name="Smart Intel case"):
     objects=[identity]
     for item in evidence:
         content=str(item.get("content","")); source_url=str(item.get("url",""))
-        objects.append({"type":"note","spec_version":"2.1","id":"note--"+str(uuid.uuid4()),"created":now,"modified":now,"content":f"{item.get('title','Finding')}\\nSource: {item.get('source','')}\\nURL: {source_url}\\nConfidence: {item.get('confidence','Unknown')}\\n\\n{content}","abstract":item.get("title","OSINT observation"),"authors":["Smart Intel analyst"],"object_refs":[identity["id"]]})
+        objects.append({"type":"note","spec_version":"2.1","id":"note--"+str(uuid.uuid4()),"created":now,"modified":now,"content":f"{item.get('title','Finding')}\nSource: {item.get('source','')}\nURL: {source_url}\nConfidence: {item.get('confidence','Unknown')}\n\n{content}","abstract":item.get("title","OSINT observation"),"authors":["Smart Intel analyst"],"object_refs":[identity["id"]]})
         candidates=[]
         for match in re.findall(r"https?://[^\s<>]+", source_url+" "+content):
             clean=match.rstrip(".,);]")
