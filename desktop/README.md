@@ -1,20 +1,8 @@
-# Smart Intel — AI OSINT Workstation
+# Smart Intel — PyQt6 OSINT desktop
 
-Cross-platform PyQt6 desktop app for authorized, passive open-source intelligence research. It combines public-source collection, case management, evidence tracking, optional multi-provider AI analysis and HTML reporting.
+This is the primary application. Smart Intel is a cross-platform desktop workspace for lawful, passive public-source research.
 
-## Features in this foundation
-
-- **Cases:** create and switch investigations; case and evidence data are stored locally in SQLite.
-- **Domain intelligence:** system DNS resolution, ICANN RDAP registration summary and TLS certificate metadata.
-- **Public IP intelligence:** public RDAP registration data and reverse DNS. Private, loopback and other non-global addresses are rejected.
-- **Website intelligence:** public page title, description, selected security headers, outbound links and bounded text excerpt.
-- **AI analyst:** optional OpenAI, Gemini and Claude API integrations. Keys are saved in the operating system credential store via keyring.
-- **Evidence timeline:** source, observation timestamp, URL and confidence are stored for each finding.
-- **Reports:** export a self-contained HTML evidence report.
-
-## Run from source
-
-Python 3.10+ is recommended.
+## Run
 
 ```bash
 python -m venv .venv
@@ -24,24 +12,29 @@ python -m pip install -r requirements.txt
 python main.py
 ```
 
-Configure API keys from **AI provider settings**. Provider API usage is billed separately.
+Python 3.10+ recommended. Install development dependencies and run tests with:
 
-## Build desktop packages
+```bash
+python -m pip install -r requirements-dev.txt
+python -m pytest -q
+```
 
-Build on the target OS and architecture; PyInstaller does not cross-compile.
+## Current desktop features
 
-- Windows: `build_windows.bat`
-- macOS: `./build_macos.sh` (sign and notarize before public distribution)
-- Linux: `./build_linux.sh`
+- Local SQLite investigation cases and evidence table.
+- Passive DNS/RDAP/TLS and public website metadata.
+- OSINT Sources panel: crt.sh, Wayback, VirusTotal, AbuseIPDB, urlscan.io, OTX, Shodan/Censys existing host metadata, SecurityTrails passive DNS, GDELT, MISP exact IOC search, public username reference links and authorized breach-check guidance.
+- OpenAI, Gemini and Claude analysis; OSINT and AI API keys stored with keyring.
+- Hash-linked audit journal for case/evidence additions.
+- Analysis helpers for deduplication, source-type credibility, heuristic risk triage and entity extraction.
+- JSON, CSV, STIX 2.1 note-bundle, DOCX and PDF export helpers; HTML export from the GUI.
 
-See [BUILDING.md](BUILDING.md).
+## Important limitations
 
-## Responsible-use scope
+This is an actively developing foundation, not a finished enterprise OSINT suite. The timeline is a table; graph helpers are not a graph UI. Historical WHOIS, personal email/phone lookups, company/court/sanctions sources, reverse-image search, Telegram/dark-web/forum feeds, local AI, WARC/screenshots, attachment vault, fully encrypted database, signature verification UI, multi-user roles, tasks/comments, proxy/Tor, scheduled monitoring, CLI/API, SIEM/SOAR integrations, branded report templates and signed public installers remain incomplete. See [capability matrix](../docs/osint/CAPABILITY-MATRIX.md).
 
-Smart Intel is designed for passive research of public information and systems you own or are authorized to assess. It does not attempt authentication, bypass access controls, exploit systems, perform port scanning, enumerate private accounts or retrieve non-public data. Respect site terms, privacy laws, rate limits and applicable policies. A public-source result is not proof of identity, ownership, compromise or wrongdoing. Validate findings independently and document uncertainty.
+Port, service and technology-stack fingerprinting is intentionally excluded. No active scanning, exploitation, account scraping, credential dumps or access-control bypass.
 
-Cases are stored locally in `~/.smart-intel/data/`. API keys use the OS credential store. Evidence sent to an AI provider is transmitted to that provider's API; do not submit sensitive or confidential material unless authorized.
+## Packaging
 
-## Current limitations
-
-This is an initial functional foundation, not a mature enterprise platform. Username search, social platforms, threat feeds, graph visualization, advanced source validation, signed installers and AppImage packaging are planned modules.
+See [BUILDING.md](BUILDING.md). Build separately on each target OS; PyInstaller is not a cross-compiler. CI build artifacts are not yet signed public releases.
