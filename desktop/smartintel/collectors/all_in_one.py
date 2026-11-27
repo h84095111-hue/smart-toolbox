@@ -7,9 +7,10 @@ from . import passive_sources as src
 def run_all(target, misp_url=""):
     raw=(target or "").strip()
     if not raw: raise ValueError("Enter a domain, public IP address or website URL.")
+    raw_is_email=bool(re.fullmatch(r"[^\\s@]+@[^\\s@]+\\.[^\\s@]+",raw))
     parsed=urlparse(raw if "://" in raw else "https://"+raw)
     is_url=("://" in raw) or ("/" in raw)
-    host=parsed.hostname if is_url else raw
+    host=raw if raw_is_email else (parsed.hostname if is_url else raw)
     if not host: raise ValueError("Could not identify a target host.")
     try:
         ip=ipaddress.ip_address(host)
