@@ -13,7 +13,7 @@
 ## Available now
 
 - PyQt6 desktop shell with a refined dark-first interface, local SQLite cases, evidence table and AI analyst.
-- One-click **All-in-One Passive Scan**: auto-detects domain, public IP or URL, runs the relevant built-in collectors and configured OSINT providers, and keeps going when individual providers fail.
+- One-click **All-in-One Passive Scan**: auto-detects domain, public IP, URL, username or email, runs the relevant built-in collectors and configured OSINT providers, and keeps going when individual providers fail.
 - Passive DNS/RDAP/TLS and public website metadata collection.
 - Optional provider lookups: crt.sh certificate transparency, Wayback CDX, VirusTotal, AbuseIPDB, urlscan.io, AlienVault OTX, Shodan existing-host data, Censys existing-host data, SecurityTrails passive DNS, GDELT news and user-configured MISP exact-IOC search.
 - Public username profile reference links (no account scraping or identity verification).
