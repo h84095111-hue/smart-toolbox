@@ -5,7 +5,7 @@ from .passive import collect_domain, collect_ip, collect_website
 from . import passive_sources as src
 
 def run_all(target, misp_url=""):
-    raw=(target or "").strip()
+    raw_is_email=bool(re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+",raw))
     if not raw: raise ValueError("Enter a domain, public IP address or website URL.")
     raw_is_email=bool(re.fullmatch(r"[^\\s@]+@[^\\s@]+\\.[^\\s@]+",raw))
     parsed=urlparse(raw if "://" in raw else "https://"+raw)
