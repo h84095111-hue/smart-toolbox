@@ -19,7 +19,7 @@ class IntegrationsPanel(QWidget):
         title=QLabel("Passive OSINT collection"); title.setStyleSheet("font-size:21px;font-weight:800"); v.addWidget(title)
         note=QLabel("Run one source or orchestrate all relevant passive sources for a domain, public IP or URL. Missing provider keys are skipped; source errors do not stop the rest of the scan.")
         note.setWordWrap(True); note.setObjectName("muted"); v.addWidget(note)
-        row=QHBoxLayout(); self.target=QLineEdit(); self.target.setPlaceholderText("example.org · public IP · https://example.org"); row.addWidget(self.target,3)
+        row=QHBoxLayout(); self.target=QLineEdit(); self.target.setPlaceholderText("domain · public IP · URL · username · email"); row.addWidget(self.target,3)
         self.all_button=QPushButton("⚡  All-in-One Passive Scan"); self.all_button.setObjectName("primary"); self.all_button.clicked.connect(self.run_all_sources); row.addWidget(self.all_button,2); v.addLayout(row)
         row2=QHBoxLayout(); self.source=QComboBox(); self.source.addItems(["Certificate transparency (crt.sh)","Wayback Machine","VirusTotal domain","AbuseIPDB public IP","urlscan.io domain","AlienVault OTX domain","Shodan existing IP data","Censys existing IP data","SecurityTrails passive DNS","GDELT public news","Public username reference links","Authorized breach-check workflow","MISP exact IOC search"]); row2.addWidget(self.source,2)
         self.misp=QLineEdit(); self.misp.setPlaceholderText("Optional MISP HTTPS base URL"); row2.addWidget(self.misp,2)
