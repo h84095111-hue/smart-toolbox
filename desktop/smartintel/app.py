@@ -36,10 +36,10 @@ class SettingsDialog(QDialog):
         super().__init__(parent); self.setWindowTitle("AI provider settings"); self.setMinimumWidth(470)
         v=QVBoxLayout(self); v.addWidget(QLabel("API keys are saved in your OS credential store using keyring."))
         self.fields={}
-        for p in ("OpenAI","Gemini","Claude"):
-            v.addWidget(QLabel(p+" API key")); row=QHBoxLayout(); e=QLineEdit(); e.setEchoMode(QLineEdit.EchoMode.Password); e.setText(get_api_key(p) or ""); row.addWidget(e)
+        for p in ("OpenAI","Gemini","Claude","virustotal","abuseipdb","otx","shodan","censys","securitytrails","misp"):
+            v.addWidget(QLabel(({"virustotal":"VirusTotal","abuseipdb":"AbuseIPDB","otx":"AlienVault OTX","shodan":"Shodan","censys":"Censys","securitytrails":"SecurityTrails","misp":"MISP"}).get(p,p)+" API key")); row=QHBoxLayout(); e=QLineEdit(); e.setEchoMode(QLineEdit.EchoMode.Password); e.setText(get_api_key(p) or ""); row.addWidget(e)
             clear=QPushButton("Clear"); clear.clicked.connect(lambda _,provider=p,field=e:self.clear(provider,field)); row.addWidget(clear); v.addLayout(row); self.fields[p]=e
-        note=QLabel("Provider usage is billed separately by each AI provider."); note.setObjectName("muted"); v.addWidget(note)
+        note=QLabel("AI and OSINT provider usage may be billed separately. Keys are stored in your OS credential store."); note.setObjectName("muted"); v.addWidget(note)
         save=QPushButton("Save keys"); save.setObjectName("primary"); save.clicked.connect(self.save); v.addWidget(save)
     def clear(self,p,e):
         try:delete_api_key(p)
