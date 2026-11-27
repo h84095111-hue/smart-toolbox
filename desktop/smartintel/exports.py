@@ -1,5 +1,6 @@
 """JSON, CSV, STIX 2.1 note-bundle and DOCX export helpers."""
-import csv,json,uuid
+import csv,json,uuid,re,ipaddress
+from urllib.parse import urlparse
 from pathlib import Path
 from datetime import datetime,timezone
 def export_json(case,evidence,path):
@@ -13,7 +14,26 @@ def export_stix(evidence,path,case_name="Smart Intel case"):
     identity={"type":"identity","spec_version":"2.1","id":"identity--"+str(uuid.uuid4()),"created":now,"modified":now,"name":"Smart Intel analyst","identity_class":"individual"}
     objects=[identity]
     for item in evidence:
-        objects.append({"type":"note","spec_version":"2.1","id":"note--"+str(uuid.uuid4()),"created":now,"modified":now,"content":f"{item.get('title','Finding')}\\nSource: {item.get('source','')}\\nURL: {item.get('url','')}\\nConfidence: {item.get('confidence','Unknown')}\\n\\n{item.get('content','')}","abstract":item.get("title","OSINT observation"),"authors":["Smart Intel analyst"],"object_refs":[identity["id"]]})
+        content=str(item.get("content","")); source_url=str(item.get("url",""))
+        objects.append({"type":"note","spec_version":"2.1","id":"note--"+str(uuid.uuid4()),"created":now,"modified":now,"content":f"{item.get('title','Finding')}\\nSource: {item.get('source','')}\\nURL: {source_url}\\nConfidence: {item.get('confidence','Unknown')}\\n\\n{content}","abstract":item.get("title","OSINT observation"),"authors":["Smart Intel analyst"],"object_refs":[identity["id"]]})
+        candidates=[]
+        for match in re.findall(r"https?://[^\\s<>\\\"']+", source_url+" "+content):
+            clean=match.rstrip(".,);]")
+            if clean: candidates.append(("url",clean))
+        for match in re.findall(r"(?i)\\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,}\\b", source_url+" "+content):
+            candidates.append(("domain",match.lower().rstrip(".")))
+        for match in re.findall(r"\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b", source_url+" "+content):
+            try:
+                if ipaddress.ip_address(match).is_global: candidates.append(("ipv4",match))
+            except ValueError: pass
+        seen=set()
+        for kind,value in candidates:
+            if (kind,value) in seen: continue
+            seen.add((kind,value))
+            if kind=="url": pattern=f"[url:value = '{value.replace(chr(39), chr(92)+chr(39))}']"
+            elif kind=="domain": pattern=f"[domain-name:value = '{value}']"
+            else: pattern=f"[ipv4-addr:value = '{value}']"
+            objects.append({"type":"indicator","spec_version":"2.1","id":"indicator--"+str(uuid.uuid4()),"created":now,"modified":now,"name":f"Observed {kind}: {value}","description":"Extracted from collected evidence; not independently validated as malicious.","indicator_types":["unknown"],"pattern_type":"stix","pattern":pattern,"valid_from":now,"created_by_ref":identity["id"]})
     Path(path).write_text(json.dumps({"type":"bundle","id":"bundle--"+str(uuid.uuid4()),"objects":objects},indent=2,ensure_ascii=False),encoding="utf-8")
 def export_docx(case_name,evidence,path):
     from docx import Document
