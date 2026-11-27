@@ -31,7 +31,9 @@ def test_exports(tmp_path):
     export_csv(evidence,str(tmp_path/"x.csv"))
     export_stix(evidence,str(tmp_path/"x.stix.json"))
     assert json.loads((tmp_path/"x.json").read_text())["evidence"][0]["title"]=="Example"
-    assert json.loads((tmp_path/"x.stix.json").read_text())["objects"][1]["type"]=="note"
+    bundle=json.loads((tmp_path/"x.stix.json").read_text())
+    assert bundle["objects"][1]["type"]=="note"
+    assert any(obj["type"]=="indicator" and "url:value" in obj.get("pattern","") for obj in bundle["objects"])
 
 def test_username_lookup_is_reference_only():
     from smartintel.collectors.passive_sources import public_username_reference
