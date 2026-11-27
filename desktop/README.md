@@ -21,7 +21,8 @@ python -m pytest -q
 
 ## Current desktop features
 
-- Local SQLite investigation cases and evidence table.
+- Dark-first PyQt6 interface, local SQLite investigation cases and evidence table.
+- One-click All-in-One Passive Scan for domains, public IPs and URLs; automatically selects relevant passive sources and records per-provider failures/skips.
 - Passive DNS/RDAP/TLS and public website metadata.
 - OSINT Sources panel: crt.sh, Wayback, VirusTotal, AbuseIPDB, urlscan.io, OTX, Shodan/Censys existing host metadata, SecurityTrails passive DNS, GDELT, MISP exact IOC search, public username reference links and authorized breach-check guidance.
 - OpenAI, Gemini and Claude analysis; OSINT and AI API keys stored with keyring.
