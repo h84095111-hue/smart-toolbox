@@ -1,127 +1,60 @@
-<div align="center">
-  <img src="docs/assets/smart-toolbox-hero.svg" alt="Smart Toolbox Pro — everyday utilities in one workspace" width="100%" />
+# Smart Intel — AI OSINT Workstation
 
-  <h1>Smart Toolbox</h1>
-  <p><strong>Everyday utilities. One beautiful workspace.</strong></p>
-  <p>A privacy-first collection of practical tools that run directly in your browser.</p>
+**A cross-platform, AI-assisted OSINT desktop app built with Python + PyQt6.** Collect public information, organize investigations, analyze evidence with your preferred AI provider and export source-linked reports.
 
-  ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue?logo=typescript)
-  ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)
-  ![Vite](https://img.shields.io/badge/Vite-6-646CFF?logo=vite)
-  ![License](https://img.shields.io/badge/License-MIT-green)
-</div>
+> This repository is being redesigned from the earlier Smart Toolbox project into Smart Intel. The current desktop foundation is in [desktop/](desktop/).
 
+## Desktop GUI
 
-## 🖥️ Native desktop application (PyQt6)
+![Smart Intel desktop interface preview](desktop/assets/smart-intel-preview.svg)
 
-A cross-platform desktop edition is now available in the [desktop folder](desktop/). It uses Python + PyQt6 and includes the same 12 utilities in a native GUI for **Windows, macOS, and Linux**.
+*Concept preview of the Smart Intel investigation workspace; illustrative artwork, not a screenshot of the running application.*
 
-### Desktop GUI preview
+## Current capabilities
 
-![Smart Toolbox PyQt6 desktop GUI preview](desktop/assets/smart-toolbox-gui.svg)
+- Investigation cases stored locally in SQLite.
+- Passive domain lookups: DNS, RDAP registration and TLS certificate metadata.
+- Public IP lookups: RDAP registration and reverse DNS; non-global addresses are rejected.
+- Public website metadata: page title, description, selected security headers, links and bounded text excerpt.
+- Optional OpenAI, Gemini and Claude analysis using user-supplied API keys.
+- Local evidence timeline with timestamps, source URLs and confidence labels.
+- HTML report export.
 
-*Illustrative interface concept showing the planned desktop layout and tool dashboard; it is a design preview, not a screenshot of the running app.*
-
-Quick start in powershell:
+## Quick start
 
 ```bash
-cd desktop
+git clone https://github.com/h84095111-hue/smart-toolbox.git
+cd smart-toolbox/desktop
 python -m venv .venv
-# Activate the environment (see desktop/README.md)
+# Activate: Windows .venv\\Scripts\\Activate.ps1 | macOS/Linux source .venv/bin/activate
 python -m pip install -r requirements.txt
 python main.py
 ```
 
-Packaging scripts and detailed instructions are in [desktop/BUILDING.md](desktop/BUILDING.md). Build separately on each target OS; PyInstaller does not cross-compile. GitHub Actions is configured to create OS-specific build artifacts when the desktop files change.
+Python 3.10+ is recommended. Configure AI keys in **AI provider settings**. Provider usage is billed separately.
 
-## ✨ What's inside
+## Build for your OS
 
-| Tool | What it does |
-|---|---|
-| 🔐 Password generator | Creates random passwords with adjustable length and character sets using the Web Crypto API. |
-| ▦ QR code generator | Turns text or links into downloadable QR-code PNGs. |
-| `{}` JSON formatter | Validates, pretty-prints and minifies JSON. |
-| ⇄ Base64 converter | Encodes and decodes UTF-8 text. |
-| 🔗 URL encoder | Encodes and decodes URL components. |
-| # SHA-256 | Hashes text with the browser's Web Crypto API. |
-| Aa Text toolkit | Counts words, characters and lines; changes case and cleans whitespace. |
-| ↔ Unit converter | Converts length, weight and temperature. |
-| 🆔 UUID generator | Creates random version-4 identifiers with Web Crypto. |
-| 🎨 Color converter | Shows HEX, RGB and HSL values for a selected color. |
-| ◷ Timestamp converter | Converts Unix timestamps (seconds) to UTC dates. |
-| 📝 Markdown helper | Drafts and previews basic Markdown formatting. |
+- Windows: `desktop/build_windows.bat`
+- macOS: `desktop/build_macos.sh`
+- Linux: `desktop/build_linux.sh`
 
-## 🚀 Install and run
+See [desktop/BUILDING.md](desktop/BUILDING.md). Build separately on each target OS; PyInstaller does not cross-compile. GitHub Actions builds on all three OS runners.
 
-**Requirements:** Node.js 18.18 or newer and npm.
+## Roadmap
 
-```bash
-git clone https://github.com/h84095111-hue/smart-toolbox.git
-cd smart-toolbox
-npm install
-npm run dev
-```
+1. More passive OSINT collectors (certificate transparency, DNS history providers, public threat feeds and company/news sources).
+2. Entity relationship graph and investigation timeline visualization.
+3. Multi-model compare mode and evidence-grounded agent workflows.
+4. Additional export formats and portable installers (Windows installer, signed macOS app, Linux AppImage).
+5. Automated tests, source validation and reproducible release builds.
 
-Open the local address printed by Vite (normally `http://localhost:5173`).
+## Responsible use and limitations
 
-### Build for production
+Smart Intel is intended for lawful, authorized research of public information. It does not bypass logins, exploit systems, scan ports, enumerate private accounts or access non-public data. Public data can be inaccurate or misleading; validate findings independently. Follow local law, provider terms, site policies and rate limits. AI outputs are hypotheses, not verified facts.
 
-```bash
-npm run build
-npm run preview
-```
+Cases are stored locally under `~/.smart-intel/data/`. API keys use the operating system credential store via `keyring`. When you submit evidence to an AI provider, that evidence is transmitted to that provider's API; do not submit confidential data without authorization.
 
-The production-ready website is generated in `dist/`. You can host that folder on GitHub Pages, Netlify, Vercel, or any static web host.
+## License
 
-## 📖 How to use
-
-1. Open Smart Toolbox in your browser.
-2. Choose a tool card, or search by its name or category.
-3. Enter or paste your input.
-4. Select the action (for example **Format JSON** or **Generate password**).
-5. Copy the result or download it when a download option is available.
-
-Tool-specific walkthroughs and troubleshooting are in [`docs/USAGE.md`](docs/USAGE.md). Setup help is in [`docs/INSTALLATION.md`](docs/INSTALLATION.md).
-
-## 🖼️ Preview image
-
-The banner above is product artwork, not a screenshot of the running interface.
-
-## 🔒 Privacy and security
-
-- Utility processing happens in your browser; the app has no application server or account system.
-- Password generation uses `crypto.getRandomValues()`.
-- SHA-256 uses the browser's Web Crypto API.
-- The app does not intentionally save tool inputs or generated passwords.
-- Avoid entering secrets into any website on a shared or compromised device.
-
-## 🧰 Tech stack
-
-React 18 · TypeScript · Vite · Lucide React · `qrcode.react` · Web Crypto API
-
-## 🗂 Project structure
-
-```text
-smart-toolbox/
-├── .github/workflows/ci.yml
-├── docs/
-│   ├── assets/smart-toolbox-hero.png
-│   ├── INSTALLATION.md
-│   ├── USAGE.md
-│   └── VIDEO-GUIDE.md
-├── src/
-│   ├── App.tsx
-│   ├── main.tsx
-│   └── style.css
-├── index.html
-├── package.json
-└── README.md
-```
-
-## 🤝 Contributing
-
-Issues and pull requests are welcome. Please run `npm run build` before submitting changes and describe any new browser permissions or data handling.
-
-## 📄 License
-
-MIT — see [`LICENSE`](LICENSE).
+MIT — see [LICENSE](LICENSE).
