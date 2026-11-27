@@ -21,8 +21,12 @@ def run_all(target, misp_url=""):
         try:
             item=fn(*args)
             if item is None: skipped.append(label+": no result"); return
-            if isinstance(item,list): findings.extend(item)
-            else: findings.append(item)
+            values=item if isinstance(item,list) else [item]
+            for value in values:
+                if isinstance(value,dict):
+                    findings.append(value)
+                else:
+                    findings.append({"title":getattr(value,"title","Finding"),"content":getattr(value,"value",str(value)),"source":getattr(value,"source",label),"url":getattr(value,"url",""),"confidence":getattr(value,"confidence","Medium"),"kind":"Passive OSINT"})
         except Exception as exc:
             message=str(exc).strip() or exc.__class__.__name__
             if "API key" in message or "not configured" in message or "credential" in message.lower():
