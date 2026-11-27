@@ -95,3 +95,17 @@ def test_all_in_one_supports_username_and_email_safe_paths(monkeypatch):
     assert seen==[("username","@example_user"),("email","analyst@example.org")]
     assert username["findings"][0]["title"]=="Username references"
     assert email["findings"][0]["title"]=="Breach workflow guidance"
+
+
+def test_audit_journal_is_real_jsonl_and_refuses_corrupt_append(tmp_path):
+    import pytest
+    from smartintel.evidence_integrity import append_audit, verify_audit
+    journal=tmp_path/"audit.jsonl"
+    append_audit(journal,{"action":"first"})
+    append_audit(journal,{"action":"second"})
+    assert len(journal.read_text(encoding="utf-8").splitlines())==2
+    assert verify_audit(journal)==(True,2)
+    journal.write_text(journal.read_text(encoding="utf-8")+"not-json\\n",encoding="utf-8")
+    assert verify_audit(journal)==(False,2)
+    with pytest.raises(ValueError):
+        append_audit(journal,{"action":"must-not-append"})
