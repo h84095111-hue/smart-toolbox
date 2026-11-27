@@ -39,7 +39,7 @@ def test_username_lookup_is_reference_only():
     payload=json.loads(result["content"])
     assert result["confidence"]=="Low"
     assert "github.com/example_user" in payload["links"]["GitHub"]
-    assert "not verified" in payload["note"]
+    assert "ownership is verified" in payload["note"]
 
 def test_breach_workflow_does_not_fetch_leaked_data():
     from smartintel.collectors.passive_sources import breach_check_guidance
