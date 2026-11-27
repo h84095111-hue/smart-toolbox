@@ -16,7 +16,7 @@ def append_audit(journal,event):
         if lines: previous=json.loads(lines[-1])["entry_hash"]
     body={"timestamp":datetime.now(timezone.utc).isoformat(),"previous_hash":previous,"event":event}
     body["entry_hash"]=hashlib.sha256(json.dumps(body,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()).hexdigest()
-    with p.open("a",encoding="utf-8") as f: f.write(json.dumps(body,ensure_ascii=False)+"\\n"); f.flush(); os.fsync(f.fileno())
+    with p.open("a",encoding="utf-8") as f: f.write(json.dumps(body,ensure_ascii=False)+"\n"); f.flush(); os.fsync(f.fileno())
     return body
 def verify_audit(journal):
     p=Path(journal); previous="0"*64; count=0
