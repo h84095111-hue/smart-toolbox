@@ -14,6 +14,10 @@
 
 Open **AI provider settings** and enter only the provider keys you intend to use. Keys are saved through keyring. API calls may incur third-party charges. Never commit keys to GitHub.
 
+## All-in-One Passive Scan
+
+Open **Collect** or **OSINT Sources**, enter a domain, globally routable public IP address or website URL, then select **All-in-One Passive Scan**. The application selects relevant passive sources for the target type, runs them in a background worker, and reports successful findings, provider errors and missing-key skips separately. Successful results are automatically added to the active case and audit journal. Configure optional provider keys first for the broadest coverage. A scan is not guaranteed to return results from every source: provider subscriptions, quotas, availability and legal access rules apply.
+
 ## OSINT Sources panel
 
 Choose a source, enter a domain, public IP, URL, username or IOC, and run the lookup. The result is displayed before you add it to the case. MISP requires an HTTPS instance URL and a configured API key.
