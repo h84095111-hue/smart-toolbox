@@ -97,7 +97,7 @@ def public_username_reference(username):
     name=username.strip().lstrip("@")
     if not re.fullmatch(r"[A-Za-z0-9_.-]{1,40}",name): raise ValueError("Enter a valid public username")
     links={"GitHub":"https://github.com/"+name,"GitLab":"https://gitlab.com/"+name,"Reddit":"https://www.reddit.com/user/"+name+"/","X":"https://x.com/"+name}
-    return _finding("Public profile reference links",{"username":name,"links":links,"note":"Search starting points only; no account existence, identity or ownership is verified."},"User-supplied public handle")
+    return _finding("Public profile reference links",{"username":name,"links":links,"note":"Search starting points only; no account existence, identity or ownership is verified."},"User-supplied public handle",confidence="Low")
 def breach_check_guidance(identifier):
     if not identifier.strip(): raise ValueError("Enter an identifier you are authorized to assess")
     return _finding("Authorized breach-check workflow",{"identifier":identifier.strip(),"status":"Not queried","recommended":"Verified-domain search in Have I Been Pwned or an organization-approved breach notification provider.","privacy":"This app does not retrieve stolen credentials or password dumps. Do not assess identifiers without authorization."},"Smart Intel safety workflow","https://haveibeenpwned.com/DomainSearch","High")
