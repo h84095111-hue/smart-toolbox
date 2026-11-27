@@ -16,7 +16,7 @@ Open **AI provider settings** and enter only the provider keys you intend to use
 
 ## All-in-One Passive Scan
 
-Open **Collect** or **OSINT Sources**, enter a domain, globally routable public IP address or website URL, then select **All-in-One Passive Scan**. The application selects relevant passive sources for the target type, runs them in a background worker, and reports successful findings, provider errors and missing-key skips separately. Successful results are automatically added to the active case and audit journal. Configure optional provider keys first for the broadest coverage. A scan is not guaranteed to return results from every source: provider subscriptions, quotas, availability and legal access rules apply.
+Open **Collect** or **OSINT Sources**, enter a domain, globally routable public IP address, website URL, username or email address, then select **All-in-One Passive Scan**. The application selects relevant passive sources for the target type, runs them in a background worker, and reports successful findings, provider errors and missing-key skips separately. Successful results are automatically added to the active case and audit journal. Configure optional provider keys first for the broadest coverage. A scan is not guaranteed to return results from every source: provider subscriptions, quotas, availability and legal access rules apply.
 
 ## OSINT Sources panel
 
