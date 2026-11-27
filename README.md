@@ -62,7 +62,7 @@ Build on the target OS. See [desktop/BUILDING.md](desktop/BUILDING.md). CI runs 
 | Team accounts, roles, shared cases, tasks and comments | Not implemented |
 | Proxy/Tor, scheduling and continuous monitoring | Not implemented |
 | CLI/API, SIEM/SOAR/ticketing | Not implemented |
-| JSON, CSV, STIX, DOCX, HTML | Export helpers available; PDF and branded templates pending |
+| PDF, JSON, CSV, STIX, DOCX, HTML | Export helpers available; app export UI and branded templates pending |
 | Prebuilt releases and signed installers | Not yet published |
 
 See [OSINT capability matrix](docs/osint/CAPABILITY-MATRIX.md) and [source integrations](docs/osint/SOURCES.md).
