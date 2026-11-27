@@ -8,7 +8,8 @@ from .models import Evidence
 from .collectors.passive import collect_domain, collect_ip, collect_website
 from .providers.ai import analyze, save_api_key, get_api_key, delete_api_key
 from .integrations_panel import IntegrationsPanel
-from .evidence_integrity import append_audit
+from .evidence_integrity import append_audit, verify_audit
+from .exports import export_json, export_csv, export_stix, export_pdf, export_docx
 from .config import APP_DIR
 
 STYLE="""QWidget{background:#0a1020;color:#e7ecf7;font-family:Segoe UI,Inter,Arial;font-size:13px;selection-background-color:#6558df;selection-color:#fff}
@@ -122,7 +123,8 @@ class MainWindow(QMainWindow):
     def evidence_tab(self):
         w=QWidget(); v=QVBoxLayout(w); self.table=QTableWidget(0,5); self.table.setHorizontalHeaderLabels(["Observed UTC","Title","Source","Confidence","URL"])
         self.table.horizontalHeader().setSectionResizeMode(1,QHeaderView.ResizeMode.Stretch); self.table.horizontalHeader().setSectionResizeMode(4,QHeaderView.ResizeMode.Stretch); self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows); self.table.itemSelectionChanged.connect(self.show_evidence); v.addWidget(self.table,2)
-        self.detail=QPlainTextEdit(); self.detail.setReadOnly(True); v.addWidget(self.detail,1); return w
+        self.detail=QPlainTextEdit(); self.detail.setReadOnly(True); v.addWidget(self.detail,1)
+        audit_row=QHBoxLayout(); verify=QPushButton("Verify audit chain"); verify.clicked.connect(self.verify_audit_chain); audit_row.addWidget(verify); audit_row.addStretch(); v.addLayout(audit_row); return w
     def ai_tab(self):
         w=QWidget(); v=QVBoxLayout(w); note=QLabel("Analyze evidence already collected in this case. The assistant is instructed to separate facts, inferences and unknowns."); note.setWordWrap(True); note.setObjectName("muted"); v.addWidget(note)
         r=QHBoxLayout(); self.provider=QComboBox(); self.provider.addItems(["OpenAI","Gemini","Claude"]); r.addWidget(QLabel("Provider")); r.addWidget(self.provider); r.addStretch(); v.addLayout(r)
@@ -132,7 +134,10 @@ class MainWindow(QMainWindow):
     def report_tab(self):
         w=QWidget(); v=QVBoxLayout(w); self.preview=QTextBrowser(); v.addWidget(self.preview,1)
         r=QHBoxLayout(); b=QPushButton("Preview report"); b.clicked.connect(lambda:self.preview.setHtml(self.report_html())); r.addWidget(b)
-        export=QPushButton("Export HTML report"); export.setObjectName("primary"); export.clicked.connect(self.export_report); r.addWidget(export); v.addLayout(r); return w
+        export=QPushButton("Export HTML"); export.setObjectName("primary"); export.clicked.connect(self.export_report); r.addWidget(export)
+        for label,ext,fn in [("JSON","json",export_json),("CSV","csv",export_csv),("STIX 2.1","stix.json",export_stix),("PDF","pdf",export_pdf),("DOCX","docx",export_docx)]:
+            btn=QPushButton(label); btn.clicked.connect(lambda _,e=ext,f=fn:self.export_structured(e,f)); r.addWidget(btn)
+        v.addLayout(r); return w
     def refresh_cases(self):
         self.case_list.blockSignals(True); self.case_list.clear(); self.cases=self.store.cases()
         for c in self.cases:self.case_list.addItem(c["name"])
@@ -180,11 +185,31 @@ class MainWindow(QMainWindow):
         for e in items:
             parts.append(f'<article><h3>{html.escape(e.title)}</h3><p><b>Source:</b> {html.escape(e.source)} · <b>Confidence:</b> {html.escape(e.confidence)} · {html.escape(e.observed_at)}</p><p><a href="{html.escape(e.url,quote=True)}">{html.escape(e.url)}</a></p><pre>{html.escape(e.content)}</pre></article>')
         return '<meta charset="utf-8"><style>body{font:15px Arial;max-width:950px;margin:35px auto;color:#243047}article{border:1px solid #ccd4df;border-radius:8px;padding:16px;margin:16px 0}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f3f5f8;padding:10px}</style>'+f'<h1>Smart Intel — {html.escape(case["name"] if case else "Case")}</h1><p>Generated {datetime.now(timezone.utc).isoformat()} · {len(items)} evidence items</p>'+''.join(parts)
+    def export_structured(self,extension,exporter):
+        if not self.require_case(): return
+        case=next((c for c in self.store.cases() if c["id"]==self.case_id),{"name":"Smart Intel case"})
+        items=[{"id":e.id,"title":e.title,"source":e.source,"url":e.url,"content":e.content,"observed_at":e.observed_at,"confidence":e.confidence,"kind":e.kind} for e in self.store.evidence(self.case_id)]
+        filters={"json":"JSON (*.json)","csv":"CSV (*.csv)","stix.json":"STIX 2.1 (*.stix.json)","pdf":"PDF (*.pdf)","docx":"Word (*.docx)"}
+        path,_=QFileDialog.getSaveFileName(self,"Export case",f"smart-intel-case.{extension}",filters[extension])
+        if not path:return
+        try:
+            if exporter is export_json: exporter(case,items,path)
+            elif exporter is export_stix: exporter(items,path,case.get("name","Smart Intel case"))
+            elif exporter in (export_pdf,export_docx): exporter(case.get("name","Smart Intel case"),items,path)
+            else: exporter(items,path)
+            QMessageBox.information(self,"Exported",f"Export saved to:\n{path}")
+        except Exception as exc: QMessageBox.critical(self,"Export failed",str(exc))
+    def verify_audit_chain(self):
+        ok,count=verify_audit(APP_DIR/"audit.jsonl")
+        if ok: QMessageBox.information(self,"Audit verification",f"Audit chain valid. Verified {count} entries.")
+        else: QMessageBox.warning(self,"Audit verification failed",f"Audit chain invalid after {count} verified entries. Preserve the journal for investigation.")
     def export_report(self):
         data=self.report_html()
         if not data:return
         path,_=QFileDialog.getSaveFileName(self,"Export report","smart-intel-report.html","HTML (*.html)")
-        if path:Path(path).write_text(data,encoding="utf-8"); QMessageBox.information(self,"Exported","Report saved.")
+        if path:
+            try: Path(path).write_text(data,encoding="utf-8"); QMessageBox.information(self,"Exported","Report saved.")
+            except Exception as exc: QMessageBox.critical(self,"Export failed",str(exc))
 
 def main():
     app=QApplication(sys.argv); app.setApplicationName("Smart Intel"); app.setStyleSheet(STYLE); window=MainWindow(); window.show(); sys.exit(app.exec())
