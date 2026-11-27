@@ -1,5 +1,5 @@
 """Orchestrate one target through relevant passive public-source connectors."""
-import ipaddress
+import ipaddress,re
 from urllib.parse import urlparse
 from .passive import collect_domain, collect_ip, collect_website
 from . import passive_sources as src
@@ -33,6 +33,8 @@ def run_all(target, misp_url=""):
                 skipped.append(label+": provider key/configuration missing")
             else:
                 failures.append(label+": "+message[:350])
+    is_email=bool(re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+",host))
+    is_username=not is_ip and not is_email and not is_url and "." not in host and bool(re.fullmatch(r"@?[A-Za-z0-9_.-]{2,64}",host))
     if is_ip:
         if not ip.is_global: raise ValueError("Only globally routable public IP addresses are supported.")
         run("IP RDAP and reverse DNS",collect_ip,str(ip))
@@ -40,6 +42,14 @@ def run_all(target, misp_url=""):
         run("Shodan existing host metadata",src.shodan_host,str(ip))
         run("Censys existing host metadata",src.censys_host,str(ip))
         if misp_url.strip(): run("MISP exact IOC",src.misp_search,misp_url.strip(),str(ip))
+    elif is_email:
+        run("Authorized breach notification guidance",src.breach_check_guidance,host)
+        skipped.append("Email enrichment: no personal email dossier or leaked-credential search is performed")
+        if misp_url.strip(): run("MISP exact IOC",src.misp_search,misp_url.strip(),host)
+    elif is_username:
+        run("Public username reference links",src.public_username_reference,host)
+        skipped.append("Username matches are references only; account ownership is not verified")
+        if misp_url.strip(): run("MISP exact IOC",src.misp_search,misp_url.strip(),host)
     else:
         domain=host.lower().rstrip(".")
         if is_url:
