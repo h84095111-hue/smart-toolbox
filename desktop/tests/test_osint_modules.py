@@ -111,3 +111,14 @@ def test_audit_journal_is_real_jsonl_and_refuses_corrupt_append(tmp_path):
     assert verify_audit(journal)==(False,2)
     with pytest.raises(ValueError):
         append_audit(journal,{"action":"must-not-append"})
+
+
+def test_stix_note_content_uses_real_newlines(tmp_path):
+    import json
+    from smartintel.exports import export_stix
+    path=tmp_path/"evidence.stix.json"
+    export_stix([{"title":"Finding","source":"Unit test","url":"https://example.org","confidence":"High","content":"Body text"}],path)
+    bundle=json.loads(path.read_text(encoding="utf-8"))
+    note=next(obj for obj in bundle["objects"] if obj["type"]=="note")
+    assert "\\n" not in note["content"]
+    assert "\nSource: Unit test\nURL: https://example.org" in note["content"]
