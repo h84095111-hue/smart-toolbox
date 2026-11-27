@@ -82,3 +82,16 @@ def test_all_in_one_scan_rejects_private_ip():
     from smartintel.collectors.all_in_one import run_all
     with pytest.raises(ValueError):
         run_all("192.168.1.1")
+
+
+def test_all_in_one_supports_username_and_email_safe_paths(monkeypatch):
+    from smartintel.collectors import all_in_one as scan
+    from smartintel.collectors import passive_sources as sources
+    seen=[]
+    monkeypatch.setattr(sources,"public_username_reference",lambda value: seen.append(("username",value)) or {"title":"Username references","content":"{}","source":"Public references","url":"","confidence":"Low"})
+    monkeypatch.setattr(sources,"breach_check_guidance",lambda value: seen.append(("email",value)) or {"title":"Breach workflow guidance","content":"{}","source":"Authorized workflow","url":"","confidence":"Low"})
+    username=scan.run_all("@example_user")
+    email=scan.run_all("analyst@example.org")
+    assert seen==[("username","@example_user"),("email","analyst@example.org")]
+    assert username["findings"][0]["title"]=="Username references"
+    assert email["findings"][0]["title"]=="Breach workflow guidance"
