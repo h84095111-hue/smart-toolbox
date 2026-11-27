@@ -23,10 +23,10 @@ Status reflects code in the current repository, not a marketing checklist.
 | Risk/reputation scoring | Partial | Transparent heuristic helper, not calibrated |
 | Source credibility | Partial | Source-type heuristic only |
 | Local/offline AI | Planned | Current AI providers are remote APIs |
-| Chain of custody/audit | Partial | Hash-linked JSONL journal; verification UI pending |
-| Tamper-evident hashes/signatures | Partial | Hash chain, SHA-256 and signing helpers |
+| Chain of custody/audit | Partial | Hash-linked JSONL journal with a verification action; local file access can still permit full rewrite and re-hash |
+| Tamper-evident hashes/signatures | Partial | SHA-256 and hash-chain checks; signing helper is not yet a trusted signing workflow or externally anchored checkpoint |
 | Screenshots / WARC | Not implemented | Capture pipeline pending |
-| Encrypted storage | Partial | Fernet helper only; SQLite is not automatically encrypted |
+| Encrypted storage | Not implemented | SQLite case database remains plaintext; Fernet helper does not encrypt database pages or manage keys/migrations |
 | Attachments/file import | Not implemented | Attachment vault pending |
 | Multi-user roles/shared cases | Not implemented | Local single-user app |
 | Comments/tasks/assignment | Not implemented | Collaboration layer pending |
@@ -35,10 +35,10 @@ Status reflects code in the current repository, not a marketing checklist.
 | Scheduled monitoring | Not implemented | Scheduler/alerting pending |
 | API/CLI/automation | Not implemented | Python helper modules only |
 | SIEM/SOAR/ticketing | Not implemented | Integrations pending |
-| PDF / Word / STIX / CSV / JSON | Partial | PDF, DOCX, STIX note bundle, CSV and JSON helpers; app export UI still needs wiring |
+| PDF / Word / STIX / CSV / JSON | Partial | Export actions are wired in the desktop UI; STIX currently emits evidence notes and typed URL/domain/public IPv4 Indicators extracted from evidence; format validation and interoperability testing remain |
 | Branded templates | Not implemented | Template engine pending |
-| IOC sharing | Partial | STIX note bundle; typed STIX Indicator objects pending |
-| Test coverage | Expanded | Unit tests for storage, IP restrictions, audit, analysis and exports; provider network tests pending |
+| IOC sharing | Partial | Typed STIX 2.1 Indicator objects are emitted for extracted URL, domain and globally routable IPv4 values; extracted values are observations, not verdicts |
+| Test coverage | Expanded, CI validation pending | Unit tests cover storage, IP restrictions, audit and exports; new STIX newline regression test added; provider network tests and independent security testing remain |
 | Signed releases/installers | Not implemented | CI build artifacts only |
 | Prebuilt releases | Not yet published | CI artifacts are not a stable public release |
 | Documentation | Updated | OSINT install, usage, sources, security and matrix |
