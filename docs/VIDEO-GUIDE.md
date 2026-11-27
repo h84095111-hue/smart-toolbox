@@ -1,22 +1,24 @@
-# Video walkthrough recording plan
+# Smart Intel demo recording guide
 
-This guide is intended for recording a genuine screen capture of the running application. The repository does not currently contain a recorded demo video.
+The repository currently contains a concept preview, not a screenshot or recording of the running PyQt6 app. Do not present concept art as a real application capture.
 
-## Suggested 60–90 second walkthrough
+## Suggested 90–120 second walkthrough
 
-1. Start the app with `npm run dev` and open the local Vite URL.
-2. Show the dashboard and search field.
-3. Generate a password and copy it.
-4. Create and download a QR code.
-5. Format a JSON example.
-6. Demonstrate the Base64 and URL converters.
-7. Show the text statistics and unit converter.
-8. Finish with UUID, color, timestamp, and Markdown tools.
+1. Launch Smart Intel from `desktop/main.py`.
+2. Create a clearly fictional investigation case.
+3. Run a passive domain lookup against a domain you own or a reserved example domain.
+4. Open **OSINT Sources** and demonstrate certificate transparency or Wayback results.
+5. Show the provider settings without revealing any API key.
+6. Add a finding to the case and show the evidence table and UTC timestamp.
+7. Open the AI Analyst and explain that evidence is sent to the selected cloud provider.
+8. Show the HTML report export and the JSON/CSV/STIX/DOCX/PDF export helpers.
+9. Briefly show the audit journal location and security limitations.
 
-## Recording tips
+## Recording
 
-- Record at 1920×1080 or 1280×720.
-- Keep browser zoom at 100%.
-- Use sample data only; do not display real passwords or private information.
-- Capture the running app, not the static README artwork.
-- Export as MP4 and add it to the repository under `docs/assets/demo.mp4` if desired.
+- Capture the actual PyQt6 window at 1920×1080 or 1280×720.
+- Use fictional/example targets and never display real API keys or private information.
+- Include the OS and app version in the opening or closing slate.
+- Do not claim features marked pending in the capability matrix are implemented.
+- Save a real screenshot as `docs/assets/smart-intel-real-screenshot.png` and an optional demo as `docs/assets/smart-intel-demo.mp4`.
+- Update the README image only after the screenshot has been captured from a running build.
