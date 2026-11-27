@@ -7,6 +7,9 @@ from .storage import Store
 from .models import Evidence
 from .collectors.passive import collect_domain, collect_ip, collect_website
 from .providers.ai import analyze, save_api_key, get_api_key, delete_api_key
+from .integrations_panel import IntegrationsPanel
+from .evidence_integrity import append_audit
+from .config import APP_DIR
 
 STYLE="""QWidget{background:#0b1220;color:#e6edf8;font-family:Segoe UI,Arial;font-size:13px}
 QFrame#sidebar{background:#101a2c;border-right:1px solid #283852}
@@ -70,7 +73,7 @@ class MainWindow(QMainWindow):
         top=QHBoxLayout(); eyebrow=QLabel("INTELLIGENCE WORKSPACE"); eyebrow.setObjectName("eyebrow"); top.addWidget(eyebrow); top.addStretch()
         self.status=QLabel("Ready"); self.status.setObjectName("muted"); top.addWidget(self.status); mv.addLayout(top)
         hero=QLabel("Investigate the public web.\nConnect evidence. Find the signal."); hero.setObjectName("heading"); hero.setStyleSheet("background:#182449;border:1px solid #38457a;border-radius:12px;padding:18px"); mv.addWidget(hero)
-        self.tabs=QTabWidget(); self.tabs.addTab(self.collect_tab(),"Collect"); self.tabs.addTab(self.evidence_tab(),"Evidence & Timeline"); self.tabs.addTab(self.ai_tab(),"AI Analyst"); self.tabs.addTab(self.report_tab(),"Reports"); mv.addWidget(self.tabs,1)
+        self.tabs=QTabWidget(); self.tabs.addTab(self.collect_tab(),"Collect"); self.integrations=IntegrationsPanel(); self.integrations.finding_ready.connect(self.integration_done); self.tabs.addTab(self.integrations,"OSINT Sources"); self.tabs.addTab(self.evidence_tab(),"Evidence & Timeline"); self.tabs.addTab(self.ai_tab(),"AI Analyst"); self.tabs.addTab(self.report_tab(),"Reports"); mv.addWidget(self.tabs,1)
         row.addWidget(main,1); self.setCentralWidget(root); self.refresh_cases()
         if self.case_list.count():self.case_list.setCurrentRow(0)
         else:self.new_case()
@@ -83,6 +86,12 @@ class MainWindow(QMainWindow):
         self.collect_btn=QPushButton("Collect evidence"); self.collect_btn.setObjectName("primary"); self.collect_btn.clicked.connect(self.collect); r.addWidget(self.collect_btn); v.addLayout(r)
         self.collect_log=QPlainTextEdit(); self.collect_log.setReadOnly(True); self.collect_log.setPlaceholderText("Collection output appears here…"); v.addWidget(self.collect_log,1)
         hint=QLabel("DNS · RDAP · TLS certificate · public website metadata, headers and links. No active scanning."); hint.setObjectName("muted"); v.addWidget(hint); return w
+    def integration_done(self, finding):
+        if not self.require_case(): return
+        item=Evidence(self.case_id,finding.get("source","Unknown"),finding.get("title","OSINT finding"),finding.get("url",""),finding.get("content",""),confidence=finding.get("confidence","Medium"),kind=finding.get("kind","Passive OSINT"))
+        self.store.add_evidence(item)
+        append_audit(APP_DIR/"audit.jsonl",{"action":"evidence_added","case_id":self.case_id,"evidence_id":item.id,"source":item.source,"title":item.title})
+        self.refresh_evidence(); self.status.setText("OSINT finding added to case")
     def evidence_tab(self):
         w=QWidget(); v=QVBoxLayout(w); self.table=QTableWidget(0,5); self.table.setHorizontalHeaderLabels(["Observed UTC","Title","Source","Confidence","URL"])
         self.table.horizontalHeader().setSectionResizeMode(1,QHeaderView.ResizeMode.Stretch); self.table.horizontalHeader().setSectionResizeMode(4,QHeaderView.ResizeMode.Stretch); self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows); self.table.itemSelectionChanged.connect(self.show_evidence); v.addWidget(self.table,2)
@@ -104,7 +113,7 @@ class MainWindow(QMainWindow):
     def new_case(self):
         name,ok=QInputDialog.getText(self,"New investigation","Case name:")
         if ok and name.strip():
-            cid=self.store.create_case(name.strip()); self.refresh_cases()
+            cid=self.store.create_case(name.strip()); append_audit(APP_DIR/"audit.jsonl",{"action":"case_created","case_id":cid,"name":name.strip()}); self.refresh_cases()
             self.case_list.setCurrentRow(next(i for i,c in enumerate(self.cases) if c["id"]==cid))
     def case_selected(self,i):
         if i<0 or i>=len(getattr(self,"cases",[])):return
@@ -118,7 +127,7 @@ class MainWindow(QMainWindow):
         self.worker=Worker(fn,value); self.worker.done.connect(self.collection_done); self.worker.failed.connect(self.failed); self.worker.finished.connect(lambda:self.collect_btn.setEnabled(True)); self.worker.start()
     def collection_done(self,findings):
         for f in findings:
-            self.store.add_evidence(Evidence(self.case_id,f.source,f.title,f.url,f.value,confidence=f.confidence,kind="OSINT finding"))
+            item=Evidence(self.case_id,f.source,f.title,f.url,f.value,confidence=f.confidence,kind="OSINT finding"); self.store.add_evidence(item); append_audit(APP_DIR/"audit.jsonl",{"action":"evidence_added","case_id":self.case_id,"evidence_id":item.id,"source":item.source,"title":item.title})
             self.collect_log.appendPlainText(f"\n[{f.confidence}] {f.title}\nSource: {f.source}\nURL: {f.url}\n{f.value[:4500]}")
         self.status.setText(f"Collected {len(findings)} findings"); self.refresh_evidence()
     def failed(self,msg):self.status.setText("Task failed"); QMessageBox.warning(self,"Task failed",msg)
