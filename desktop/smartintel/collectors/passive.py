@@ -76,22 +76,64 @@ def _semantic_identifiers(soup):
             if "me" in rel:add("profile_or_url",href,"Self-asserted rel=me profile link")
     return found
 
+
+def _get_public_pinned(url):
+    """Fetch via the validated IP while preserving HTTP Host and TLS SNI."""
+    import urllib3
+    from urllib3.util import Timeout
+    from requests import Response
+    from requests.structures import CaseInsensitiveDict
+
+    parsed = urlparse(url)
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    try:
+        answers = socket.getaddrinfo(parsed.hostname, port, type=socket.SOCK_STREAM)
+    except socket.gaierror as exc:
+        raise ValueError(f"Could not resolve public host: {exc}") from exc
+    addresses = sorted({answer[4][0] for answer in answers})
+    if not addresses:
+        raise ValueError("Host did not resolve.")
+    if any(not ipaddress.ip_address(address).is_global for address in addresses):
+        raise ValueError("Only publicly routable website hosts are supported.")
+    pinned_ip = addresses[0]
+    headers = {**HEADERS, "Host": parsed.hostname}
+    path = parsed.path or "/"
+    if parsed.query:
+        path += "?" + parsed.query
+    timeout = Timeout(total=REQUEST_TIMEOUT, connect=REQUEST_TIMEOUT, read=REQUEST_TIMEOUT)
+    pool = None
+    try:
+        if parsed.scheme == "https":
+            pool = urllib3.HTTPSConnectionPool(
+                pinned_ip, port=port, maxsize=1, block=True,
+                cert_reqs="CERT_REQUIRED", ca_certs=requests.certs.where(),
+                server_hostname=parsed.hostname, assert_hostname=parsed.hostname,
+            )
+        else:
+            pool = urllib3.HTTPConnectionPool(pinned_ip, port=port, maxsize=1, block=True)
+        result = pool.request("GET", path, headers=headers, timeout=timeout,
+                              preload_content=False, redirect=False, retries=False)
+        response = Response()
+        response.status_code = result.status
+        response.reason = result.reason
+        response.headers = CaseInsensitiveDict(result.headers)
+        response.url = url
+        response.encoding = requests.utils.get_encoding_from_headers(response.headers)
+        response._content = result.read(MAX_PAGE_BYTES + 1, decode_content=True)
+        response._content_consumed = True
+        result.release_conn()
+        return response
+    finally:
+        if pool is not None:
+            pool.close()
+
 def collect_website(url):
     url=url.strip()
     if not urlparse(url).scheme: url='https://'+url
     p=urlparse(url)
     if p.scheme not in ('http','https') or not p.hostname: raise ValueError('Enter a valid public http(s) URL.')
     if p.username or p.password: raise ValueError('URLs containing credentials are not accepted.')
-    # Resolve and reject private, loopback, link-local and other non-global destinations.
-    try:
-        addresses=socket.getaddrinfo(p.hostname,p.port or (443 if p.scheme=='https' else 80))
-        if not addresses: raise ValueError('Host did not resolve.')
-        for a in addresses:
-            if not ipaddress.ip_address(a[4][0]).is_global: raise ValueError('Only publicly routable website hosts are supported.')
-    except socket.gaierror as e: raise ValueError(f'Could not resolve public host: {e}')
-    # Do not follow redirects: a public host could redirect to a private network address.
-    r=requests.get(url,headers=HEADERS,timeout=REQUEST_TIMEOUT,allow_redirects=False,stream=True)
-    raw=next(r.iter_content(MAX_PAGE_BYTES+1),b'')
+    # Pin the validated DNS answer to the actual TCP connection.\n    r=_get_public_pinned(url)\n    raw=r.content[:MAX_PAGE_BYTES+1]
     if len(raw)>MAX_PAGE_BYTES: raw=raw[:MAX_PAGE_BYTES]
     text=raw.decode(r.encoding or 'utf-8',errors='replace'); soup=BeautifulSoup(text,'html.parser')
     semantic_identifiers=_semantic_identifiers(soup)
