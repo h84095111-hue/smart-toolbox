@@ -138,6 +138,8 @@ def test_hibp_adapter_returns_metadata_only(monkeypatch):
     result = hibp.check_email_breaches("person@example.org")
     assert result["breach_count"] == 1
     assert result["breaches"][0]["name"] == "ExampleBreach"
+    assert result["source"] == "Have I Been Pwned"
+    assert "haveibeenpwned.com" in result["content"]
     assert all("password" not in key.casefold() for key in result["breaches"][0])
 
 
@@ -184,6 +186,8 @@ def test_opensanctions_uses_query_by_example_matching_api(monkeypatch):
     assert captured["headers"]["Authorization"] == "ApiKey test-key"
     assert captured["json"]["queries"]["smartintel-query"]["properties"]["name"] == ["Example Person"]
     assert captured["params"]["topics"] == ["sanction", "sanction.linked", "debarment"]
-    assert result["candidate_count"] == 1
-    assert result["results"][0]["score"] == 0.82
-    assert "not a legal determination" in result["content"]
+    import json
+    content = json.loads(result["content"])
+    assert content["candidate_count"] == 1
+    assert content["results"][0]["score"] == 0.82
+    assert "not a legal determination" in content["warning"]
