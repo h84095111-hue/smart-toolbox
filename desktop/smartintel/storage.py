@@ -43,12 +43,14 @@ class Store:
                 CREATE INDEX IF NOT EXISTS idx_audit_case ON audit_events(case_id,seq);
             """)
 
-    def create_case(self, name, description=''):
+    def create_case(self, name, description='', owner_id=None):
         import uuid
         cid = str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
         with self.connect() as db:
             db.execute('INSERT INTO cases VALUES(?,?,?,?)', (cid, name, description, now))
+        if owner_id:
+            self.add_case_member(cid, owner_id, "owner")
         self.append_event(cid, {"action": "case_created", "case_id": cid, "name": name})
         return cid
 
