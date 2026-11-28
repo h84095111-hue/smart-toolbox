@@ -9,6 +9,8 @@ from ..workflow import CollectorRegistry, CollectorSpec, ExecutionPolicy, run_wo
 from ..source_catalog import AdapterManager, SOURCE_CATALOG
 from .passive import collect_domain, collect_ip, collect_website
 from . import passive_sources as src
+from ..hibp import check_email_breaches
+from ..advanced_sources import opencorporates_search, courtlistener_search, opensanctions_search
 
 _ADAPTER_MANAGER = AdapterManager(retries=1, base_delay=0.2, failure_threshold=3, cooldown_seconds=90.0)
 
@@ -59,6 +61,10 @@ def build_registry(*, misp_url: str = "", adapter_manager: AdapterManager | None
     add("public_website_metadata", collect_website, target_types=("url",),
         args=lambda target, context: (context["original_target"],))
     add("email_authorized_check_guidance", src.breach_check_guidance, target_types=("email",))
+    add("hibp", check_email_breaches, target_types=("email",))
+    add("opencorporates", opencorporates_search, target_types=("record_query",))
+    add("courtlistener", courtlistener_search, target_types=("record_query",))
+    add("opensanctions", opensanctions_search, target_types=("record_query",))
     add("crtsh", src.certificate_transparency, target_types=("domain", "url"))
     add("wayback", src.wayback, target_types=("domain", "url"),
         args=lambda target, context: (context.get("original_target", target),))
@@ -128,7 +134,10 @@ def run_selected(target, source_id, misp_url=""):
     raw = (target or "").strip()
     if not raw:
         raise ValueError("Enter a lookup target.")
-    target_type, normalized, _ = _target_kind(raw)
+    if source_id in {"opencorporates","courtlistener","opensanctions"}:
+        target_type, normalized = "record_query", raw
+    else:
+        target_type, normalized, _ = _target_kind(raw)
     if target_type == "url":
         parsed = urlparse(raw if "://" in raw else "https://" + raw)
         if not parsed.hostname:
