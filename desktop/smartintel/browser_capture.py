@@ -7,7 +7,7 @@ to private/loopback addresses are blocked. This is not a general-purpose browser
 from __future__ import annotations
 
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlsplit, urlunsplit, unquote
 
 
 def _validate_public_url(url: str) -> str:
@@ -36,7 +36,14 @@ def capture_public_screenshot(url: str, output_path: str | Path, *, full_page: b
     from .network import configured_proxy_url, validate_proxy_url
     proxy_url = validate_proxy_url(configured_proxy_url())
     if proxy_url:
-        proxy = {"server": proxy_url}
+        parsed_proxy = urlsplit(proxy_url)
+        safe_netloc = parsed_proxy.hostname or ""
+        if parsed_proxy.port:
+            safe_netloc += f":{parsed_proxy.port}"
+        proxy = {"server": urlunsplit((parsed_proxy.scheme, safe_netloc, "", "", ""))}
+        if parsed_proxy.username is not None:
+            proxy["username"] = unquote(parsed_proxy.username)
+            proxy["password"] = unquote(parsed_proxy.password or "")
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True, proxy=proxy)
         try:
