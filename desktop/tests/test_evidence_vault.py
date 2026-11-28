@@ -89,6 +89,6 @@ def test_local_file_can_be_wrapped_as_warc_resource(tmp_path):
     source = tmp_path / "capture.txt"
     source.write_text("captured evidence", encoding="utf-8")
     record = make_warc_record(source)
-    assert record.startswith(b"WARC/1.1\\r\\n")
+    assert record.startswith(b"WARC/1.1\r\n")
     assert b"WARC-Type: resource" in record
     assert b"captured evidence" in record
