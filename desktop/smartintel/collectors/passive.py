@@ -8,7 +8,8 @@ from ..models import Finding
 HEADERS={'User-Agent':USER_AGENT,'Accept':'text/html,application/json;q=0.9,*/*;q=0.8'}
 
 def _rdap(url):
-    r=requests.get(url,headers=HEADERS,timeout=REQUEST_TIMEOUT,allow_redirects=True)
+    from ..network import requests_proxy_map
+    r=requests.get(url,headers=HEADERS,timeout=REQUEST_TIMEOUT,allow_redirects=False,proxies=requests_proxy_map())
     r.raise_for_status(); return r.json(),r.url
 
 def _resolve_public_addresses(host, port):
@@ -38,9 +39,9 @@ def collect_domain(domain):
     try:
         ctx=ssl.create_default_context()
         if not ips: raise ValueError("No validated public DNS address is available for TLS.")
-        with socket.create_connection((ips[0],443),timeout=REQUEST_TIMEOUT) as sock:
-            with ctx.wrap_socket(sock,server_hostname=domain) as ss:
-                cert=ss.getpeercert(); info={'subject':cert.get('subject'),'issuer':cert.get('issuer'),'notBefore':cert.get('notBefore'),'notAfter':cert.get('notAfter'),'protocol':ss.version(),'cipher':ss.cipher()}
+        from ..network import open_pinned_socket
+        with open_pinned_socket(ips[0],443,server_hostname=domain,timeout=REQUEST_TIMEOUT,use_tls=True) as ss:
+            cert=ss.getpeercert(); info={'subject':cert.get('subject'),'issuer':cert.get('issuer'),'notBefore':cert.get('notBefore'),'notAfter':cert.get('notAfter'),'protocol':ss.version(),'cipher':ss.cipher()}
         out.append(Finding('TLS certificate metadata',json.dumps(info,indent=2),'TLS handshake','https://'+domain,'High'))
     except Exception as e: out.append(Finding('TLS certificate',str(e),'TLS handshake','https://'+domain,'Low'))
     return out
