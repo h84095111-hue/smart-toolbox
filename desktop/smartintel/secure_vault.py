@@ -94,6 +94,33 @@ def read_attachment(row: dict) -> bytes:
     return original
 
 
+
+def make_warc_response(url: str) -> bytes:
+    """Capture one safely fetched public HTTP response as a WARC response record."""
+    from datetime import datetime, timezone
+    import uuid as uuid_module
+    from urllib.parse import urlparse
+    from .collectors.passive import _get_public_pinned
+
+    parsed = urlparse(url if "://" in url else "https://" + url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError("Enter a valid HTTP or HTTPS URL.")
+    response = _get_public_pinned(parsed.geturl())
+    reason = str(response.reason or "OK")
+    status_line = f"HTTP/1.1 {response.status_code} {reason}\r\n"
+    headers = "".join(f"{key}: {value}\r\n" for key, value in response.headers.items())
+    http_message = (status_line + headers + "\r\n").encode("iso-8859-1", errors="replace") + response.content
+    warc_headers = (
+        "WARC/1.1\r\n"
+        "WARC-Type: response\r\n"
+        f"WARC-Record-ID: <urn:uuid:{uuid_module.uuid4()}>\r\n"
+        f"WARC-Date: {datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}\r\n"
+        f"WARC-Target-URI: {parsed.geturl()}\r\n"
+        "Content-Type: application/http; msgtype=response\r\n"
+        f"Content-Length: {len(http_message)}\r\n\r\n"
+    ).encode("utf-8")
+    return warc_headers + http_message + b"\r\n\r\n"
+
 def make_warc_record(source_path: str | Path, target_uri: str | None = None) -> bytes:
     """Create a WARC/1.1 resource record for an imported local artifact."""
     from datetime import datetime, timezone
