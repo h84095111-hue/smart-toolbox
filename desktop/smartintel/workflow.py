@@ -195,3 +195,59 @@ def run_workflow(
         "skipped": skipped,
         "events": events,
     }
+
+def run_identity_workflow(identifier_type: str, value: str, **options: Any) -> dict[str, Any]:
+    """Run one analyst-requested identity check through the common workflow.
+
+    Maigret is classified as active because it contacts many public services;
+    it runs only after this explicit UI action and is bounded by a subprocess
+    timeout shorter than the workflow deadline.
+    """
+    from .identity_checks import check_identity
+
+    kind = (identifier_type or "").strip().lower()
+    if kind not in {"username", "email", "phone", "profile_url"}:
+        raise ValueError("Unsupported identity check type.")
+    target = (value or "").strip()
+    if not target:
+        raise ValueError("An identity value is required.")
+    spec_name = "identity_check_" + kind
+
+    def invoke(target_value: str, context: Mapping[str, Any]) -> Any:
+        settings = dict(context.get("options", {}))
+        if kind == "username":
+            settings.setdefault("process_timeout", 55)
+        return check_identity(kind, target_value, **settings)
+
+    registry = CollectorRegistry()
+    registry.register(CollectorSpec(
+        name=spec_name,
+        run=invoke,
+        description=f"Analyst-requested {kind} identity check",
+        mode="active" if kind == "username" else "passive",
+        target_types=(kind,),
+    ))
+    active = kind == "username"
+    workflow = run_workflow(
+        target,
+        registry,
+        context={"options": options},
+        policy=ExecutionPolicy(
+            max_workers=1,
+            timeout_seconds=60.0 if active else 20.0,
+            allow_active=active,
+            authorized_targets=(target,) if active else (),
+        ),
+        selected=(spec_name,),
+        target_type=kind,
+    )
+    payload = workflow["findings"][0] if workflow["findings"] else {}
+    return {
+        "result": payload,
+        "run_id": workflow["run_id"],
+        "events": workflow["events"],
+        "status": workflow["status"],
+        "failures": workflow["failures"],
+        "skipped": workflow["skipped"],
+    }
+
