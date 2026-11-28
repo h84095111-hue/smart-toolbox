@@ -1,8 +1,9 @@
 import sys, html
 from pathlib import Path
 from datetime import datetime, timezone
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QUrl
 from PyQt6.QtWidgets import *
+from PyQt6.QtGui import QDesktopServices
 from .storage import Store
 from .models import Evidence
 from .collectors.passive import collect_domain, collect_ip, collect_website
@@ -14,6 +15,9 @@ from .secure_vault import make_warc_record, make_warc_response
 import tempfile
 from .exports import export_json, export_csv, export_stix, export_pdf, export_docx
 from .config import APP_DIR
+from .browser_capture import capture_public_screenshot
+from .image_intel import inspect_image, compare_images
+from .signing import signed_export, verify_signed_export
 
 STYLE="""QWidget{background:#0a1020;color:#e7ecf7;font-family:Segoe UI,Inter,Arial;font-size:13px;selection-background-color:#6558df;selection-color:#fff}
 QMainWindow,QDialog{background:#0a1020}
@@ -129,7 +133,16 @@ class MainWindow(QMainWindow):
         append_audit(APP_DIR/"audit.jsonl",{"action":"evidence_added","case_id":self.case_id,"evidence_id":item.id,"source":item.source,"title":item.title})
         self.refresh_evidence(); self.graph_panel.refresh(); self.status.setText("OSINT finding added to case")
     def evidence_tab(self):
-        w=QWidget(); v=QVBoxLayout(w); self.table=QTableWidget(0,5); self.table.setHorizontalHeaderLabels(["Observed UTC","Title","Source","Confidence","URL"])
+        w=QWidget(); v=QVBoxLayout(w)
+        filter_row=QHBoxLayout()
+        self.timeline_from=QLineEdit(); self.timeline_from.setPlaceholderText("From YYYY-MM-DD (optional)")
+        self.timeline_to=QLineEdit(); self.timeline_to.setPlaceholderText("To YYYY-MM-DD (optional)")
+        self.timeline_query=QLineEdit(); self.timeline_query.setPlaceholderText("Search title, source, URL and evidence…")
+        apply_filter=QPushButton("Apply filters"); apply_filter.clicked.connect(self.refresh_evidence)
+        clear_filter=QPushButton("Clear"); clear_filter.clicked.connect(self.clear_timeline_filters)
+        for control in (self.timeline_from,self.timeline_to,self.timeline_query,apply_filter,clear_filter):filter_row.addWidget(control)
+        v.addLayout(filter_row)
+        self.table=QTableWidget(0,5); self.table.setHorizontalHeaderLabels(["Observed UTC","Title","Source","Confidence","URL"])
         self.table.horizontalHeader().setSectionResizeMode(1,QHeaderView.ResizeMode.Stretch); self.table.horizontalHeader().setSectionResizeMode(4,QHeaderView.ResizeMode.Stretch); self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows); self.table.itemSelectionChanged.connect(self.show_evidence); v.addWidget(self.table,2)
         self.detail=QPlainTextEdit(); self.detail.setReadOnly(True); v.addWidget(self.detail,1)
         vault_group=QGroupBox("Evidence vault — encrypted payloads and attachments")
@@ -137,7 +150,11 @@ class MainWindow(QMainWindow):
         self.vault_status_label=QLabel("Evidence payload encryption is not enabled.")
         self.vault_status_label.setWordWrap(True); vault_layout.addWidget(self.vault_status_label)
         vault_buttons=QHBoxLayout()
-        enable=QPushButton("Enable encryption"); enable.clicked.connect(self.enable_vault); vault_buttons.addWidget(enable)
+        enable=QPushButton("Encrypt evidence payloads"); enable.clicked.connect(self.enable_vault); vault_buttons.addWidget(enable)
+        full_db=QPushButton("Enable full DB encryption"); full_db.clicked.connect(self.enable_database_encryption); vault_buttons.addWidget(full_db)
+        capture_screen=QPushButton("Capture browser screenshot"); capture_screen.clicked.connect(self.capture_screenshot); vault_buttons.addWidget(capture_screen)
+        exif=QPushButton("Inspect image / EXIF"); exif.clicked.connect(self.inspect_image_file); vault_buttons.addWidget(exif)
+        reverse=QPushButton("Open reverse-image search"); reverse.clicked.connect(self.open_reverse_image_search); vault_buttons.addWidget(reverse)
         import_file=QPushButton("Import attachment"); import_file.clicked.connect(lambda:self.import_attachment("attachment")); vault_buttons.addWidget(import_file)
         import_image=QPushButton("Import screenshot"); import_image.clicked.connect(lambda:self.import_attachment("screenshot")); vault_buttons.addWidget(import_image)
         archive=QPushButton("Create WARC from file"); archive.clicked.connect(self.archive_as_warc); vault_buttons.addWidget(archive)
@@ -164,6 +181,8 @@ class MainWindow(QMainWindow):
         export=QPushButton("Export HTML"); export.setObjectName("primary"); export.clicked.connect(self.export_report); r.addWidget(export)
         for label,ext,fn in [("JSON","json",export_json),("CSV","csv",export_csv),("STIX 2.1","stix.json",export_stix),("PDF","pdf",export_pdf),("DOCX","docx",export_docx)]:
             btn=QPushButton(label); btn.clicked.connect(lambda _,e=ext,f=fn:self.export_structured(e,f)); r.addWidget(btn)
+        signed=QPushButton("Export signed bundle"); signed.clicked.connect(self.export_signed_bundle); r.addWidget(signed)
+        verify=QPushButton("Verify signed bundle"); verify.clicked.connect(self.verify_signed_bundle); r.addWidget(verify)
         v.addLayout(r); return w
     def refresh_cases(self):
         self.case_list.blockSignals(True); self.case_list.clear(); self.cases=self.store.cases()
@@ -192,13 +211,151 @@ class MainWindow(QMainWindow):
     def failed(self,msg):self.status.setText("Task failed"); QMessageBox.warning(self,"Task failed",msg)
     def refresh_evidence(self):
         if not self.case_id:return
-        self.evidence=self.store.evidence(self.case_id); self.table.setRowCount(len(self.evidence))
-        for i,e in enumerate(self.evidence):
+        self.evidence=self.store.evidence(self.case_id)
+        start=self.timeline_from.text().strip() if hasattr(self,"timeline_from") else ""
+        end=self.timeline_to.text().strip() if hasattr(self,"timeline_to") else ""
+        query=self.timeline_query.text().strip().casefold() if hasattr(self,"timeline_query") else ""
+        self.visible_evidence=[]
+        for item in self.evidence:
+            day=(item.observed_at or "")[:10]
+            if start and day and day < start: continue
+            if end and day and day > end: continue
+            haystack=" ".join((item.title,item.source,item.url,item.content)).casefold()
+            if query and query not in haystack: continue
+            self.visible_evidence.append(item)
+        self.table.setRowCount(len(self.visible_evidence))
+        for i,e in enumerate(self.visible_evidence):
             for j,val in enumerate([e.observed_at[:19].replace("T"," "),e.title,e.source,e.confidence,e.url]):self.table.setItem(i,j,QTableWidgetItem(val))
+        if hasattr(self,"status"):
+            self.status.setText(f"Timeline: {len(self.visible_evidence)} of {len(self.evidence)} evidence records")
+    def clear_timeline_filters(self):
+        self.timeline_from.clear(); self.timeline_to.clear(); self.timeline_query.clear(); self.refresh_evidence()
+
+    def enable_database_encryption(self):
+        if not self.require_case(): return
+        answer=QMessageBox.question(self,"Encrypt complete case database",
+            "Convert the entire SQLite database to SQLCipher AES-256 page encryption? A plaintext backup will be retained beside the database. Keep your OS keyring available; loss of the key makes the encrypted database unreadable.")
+        if answer != QMessageBox.StandardButton.Yes:return
+        try:
+            result=self.store.enable_database_encryption()
+            QMessageBox.information(self,"Database encrypted",
+                "Full SQLCipher encryption is enabled.\nPlaintext backup: "+result["plaintext_backup"]+
+                "\nThe original is encrypted. Store the backup securely or delete it after validating your recovery plan.")
+            self.status.setText("Full database encryption enabled")
+        except Exception as exc:
+            QMessageBox.critical(self,"Database encryption unavailable",str(exc))
+
+    def capture_screenshot(self):
+        if not self.require_case():return
+        status=self.store.vault_status()
+        if not status.get("enabled") or status.get("locked"):
+            QMessageBox.information(self,"Encrypted vault required","Enable and unlock the evidence vault before capturing a screenshot.")
+            return
+        url,ok=QInputDialog.getText(self,"Capture public webpage","Public HTTP(S) page URL:")
+        if not ok or not url.strip():return
+        handle=tempfile.NamedTemporaryFile(prefix="smartintel-shot-",suffix=".png",delete=False)
+        self.screenshot_temp=Path(handle.name); handle.close()
+        self.status.setText("Capturing public browser screenshot…")
+        self.worker=Worker(capture_public_screenshot,url.strip(),self.screenshot_temp,full_page=True)
+        self.worker.done.connect(self.screenshot_done)
+        self.worker.failed.connect(self.screenshot_failed)
+        self.worker.start()
+
+    def screenshot_done(self,details):
+        try:
+            row=self.store.add_attachment(self.case_id,details["path"],kind="screenshot")
+            append_audit(APP_DIR/"audit.jsonl",{"action":"browser_screenshot_captured","case_id":self.case_id,
+                "attachment_id":row["id"],"url":details["url"],"sha256":row["sha256"]})
+            self.refresh_attachments()
+            self.status.setText("Screenshot captured and encrypted in the evidence vault")
+            QMessageBox.information(self,"Screenshot saved",
+                "Browser screenshot stored as an encrypted attachment.\nURL: "+details["url"]+
+                "\nHTTP status: "+str(details["status_code"])+"\nSHA-256: "+row["sha256"])
+        except Exception as exc:
+            QMessageBox.critical(self,"Screenshot storage failed",str(exc))
+        finally:
+            if getattr(self,"screenshot_temp",None):self.screenshot_temp.unlink(missing_ok=True)
+
+    def screenshot_failed(self,message):
+        if getattr(self,"screenshot_temp",None):self.screenshot_temp.unlink(missing_ok=True)
+        self.failed(message)
+
+    def inspect_image_file(self):
+        if not self.require_case():return
+        path,_=QFileDialog.getOpenFileName(self,"Inspect local image","",
+            "Images (*.jpg *.jpeg *.png *.webp *.tif *.tiff *.bmp)")
+        if not path:return
+        try:
+            details=inspect_image(path)
+            from .models import Evidence
+            payload=json.dumps(details,ensure_ascii=False,indent=2)
+            if details.get("gps"):
+                answer=QMessageBox.question(self,"Location metadata found",
+                    "This image contains GPS metadata. Add its location details to the current case evidence?")
+                if answer != QMessageBox.StandardButton.Yes:return
+            item=Evidence(self.case_id,"Local image metadata",details["filename"],content=payload,
+                          confidence="Medium",kind="Image metadata")
+            self.store.add_evidence(item)
+            self.refresh_evidence(); self.graph_panel.refresh()
+            QMessageBox.information(self,"Image analysis",
+                "Local EXIF and image hash analysis saved.\nDimensions: "+str(details["width"])+" × "+str(details["height"])+
+                "\nSHA-256: "+details["sha256"]+"\ndHash64: "+details["dhash64"]+
+                "\nGPS fields: "+str(len(details.get("gps",{})))+
+                "\nUse the reverse-image search button to open a provider manually; the file was not uploaded.")
+        except Exception as exc:QMessageBox.warning(self,"Image inspection failed",str(exc))
+
+    def open_reverse_image_search(self):
+        from .image_intel import inspect_image
+        path,_=QFileDialog.getOpenFileName(self,"Choose image for reverse search","",
+            "Images (*.jpg *.jpeg *.png *.webp *.tif *.tiff *.bmp)")
+        if not path:return
+        try:
+            details=inspect_image(path)
+            names=["Google Lens","Bing Visual Search","TinEye"]
+            urls={row["provider"]:row["url"] for row in details["reverse_search_options"]}
+            provider,ok=QInputDialog.getItem(self,"Reverse image search",
+                "Choose a provider. Smart Intel will open the site only; you decide whether to upload the image.",names,0,False)
+            if ok and provider:QDesktopServices.openUrl(QUrl(urls[provider]))
+        except Exception as exc:QMessageBox.warning(self,"Reverse search unavailable",str(exc))
+
+    def export_signed_bundle(self):
+        if not self.require_case():return
+        case=next((c for c in self.store.cases() if c["id"]==self.case_id),{"name":"Smart Intel case"})
+        items=[{"id":e.id,"title":e.title,"source":e.source,"url":e.url,"content":e.content,
+                "observed_at":e.observed_at,"confidence":e.confidence,"kind":e.kind}
+               for e in self.store.evidence(self.case_id)]
+        path,_=QFileDialog.getSaveFileName(self,"Export signed evidence bundle","smart-intel-signed.zip","ZIP (*.zip)")
+        if not path:return
+        tsa_url,ok=QInputDialog.getText(self,"Optional trusted timestamp","RFC 3161 TSA URL (leave blank to skip):")
+        if not ok:return
+        tsa_ca=""
+        if tsa_url.strip():
+            tsa_ca,_=QFileDialog.getOpenFileName(self,"Optional TSA trust CA file")
+        try:
+            result=signed_export(case,items,path,tsa_url=tsa_url.strip(),tsa_ca_file=tsa_ca)
+            QMessageBox.information(self,"Signed export created",
+                "Ed25519 signature created.\nSHA-256: "+result["sha256"]+
+                "\nTimestamp status: "+result["timestamp_status"]+
+                "\nFor authenticity, compare the embedded signing-key fingerprint with a separately trusted copy.")
+        except Exception as exc:QMessageBox.critical(self,"Signed export failed",str(exc))
+
+    def verify_signed_bundle(self):
+        path,_=QFileDialog.getOpenFileName(self,"Verify signed evidence bundle","","ZIP (*.zip)")
+        if not path:return
+        try:
+            result=verify_signed_export(path)
+            if result["valid"]:
+                QMessageBox.information(self,"Signature verifies",
+                    "The Ed25519 signature matches the embedded public key.\nSHA-256: "+result["sha256"]+
+                    "\nThis does not authenticate the signer unless the public key fingerprint is independently trusted.")
+            else:
+                QMessageBox.warning(self,"Signature invalid","The bundle signature does not match its manifest.")
+        except Exception as exc:QMessageBox.critical(self,"Verification failed",str(exc))
+
     def show_evidence(self):
         rows=self.table.selectionModel().selectedRows()
         if rows:
-            e=self.evidence[rows[0].row()]; self.detail.setPlainText(f"{e.title}\nSource: {e.source}\nURL: {e.url}\nObserved: {e.observed_at}\nConfidence: {e.confidence}\n\n{e.content}")
+            e=self.visible_evidence[rows[0].row()]; self.detail.setPlainText(f"{e.title}\nSource: {e.source}\nURL: {e.url}\nObserved: {e.observed_at}\nConfidence: {e.confidence}\n\n{e.content}")
     def run_ai(self):
         if not self.require_case():return
         evidence=self.store.evidence(self.case_id)
