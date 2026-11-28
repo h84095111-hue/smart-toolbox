@@ -86,3 +86,38 @@ def test_pivot_queue_enforces_depth_and_evidence():
 def test_identity_dispatcher_rejects_unknown_type():
     with pytest.raises(ValueError):
         check_identity("password", "anything")
+
+
+
+def test_profile_url_rejects_local_hosts():
+    from smartintel.identity_checks import _public_profile_url
+    with pytest.raises(ValueError):
+        _public_profile_url("http://127.0.0.1/admin")
+    with pytest.raises(ValueError):
+        _public_profile_url("file:///etc/passwd")
+
+
+def test_profile_parser_extracts_only_explicit_rel_me_pivots(monkeypatch):
+    import socket
+    import requests
+    from smartintel.identity_checks import fetch_public_profile_metadata
+
+    monkeypatch.setattr(socket, "getaddrinfo", lambda *args, **kwargs: [
+        (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))
+    ])
+
+    class FakeResponse:
+        headers = {"Content-Type": "text/html; charset=utf-8"}
+        encoding = "utf-8"
+        is_redirect = False
+        is_permanent_redirect = False
+        def raise_for_status(self): pass
+        def iter_content(self, chunk_size=65536):
+            yield b'<html><head><title>Public page</title></head><body><a rel="me" href="https://social.example/@alice2">profile</a></body></html>'
+        def close(self): pass
+
+    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: FakeResponse())
+    result = fetch_public_profile_metadata("https://example.org/@alice")
+    assert result["profile"]["title"] == "Public page"
+    assert result["pivot_candidates"][0]["username"] == "alice2"
+    assert result["pivot_candidates"][0]["status"] == "pending_analyst_approval"
