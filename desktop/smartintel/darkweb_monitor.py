@@ -98,6 +98,10 @@ def fetch_onion_page(url: str) -> dict:
                 "transport": "Tor SOCKS5H via configured local proxy"}
     finally:
         connection.close()
+        try:
+            sock.close()
+        except Exception:
+            pass
 
 
 def monitor_onion_page(url: str, *, keywords: list[str] | None = None) -> list[dict]:
