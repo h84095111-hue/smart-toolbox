@@ -33,11 +33,43 @@ python -m pytest -q
 - Analysis helpers for deduplication, source-type credibility, heuristic risk triage and entity extraction.
 - JSON, CSV, STIX 2.1 note-bundle, DOCX and PDF export helpers; HTML export from the GUI.
 
-## Important limitations
+## Current limitations
 
-This is an actively developing foundation, not a finished enterprise OSINT suite. Historical WHOIS, personal email/phone lookups, company/court/sanctions sources, reverse-image search, Telegram/dark-web/forum feeds, local AI, WARC/screenshots, attachment vault, fully encrypted database, signature verification UI, multi-user roles, tasks/comments, proxy/Tor, scheduled monitoring, CLI/API, SIEM/SOAR integrations, branded report templates and signed public installers remain incomplete. See [capability matrix](../docs/osint/CAPABILITY-MATRIX.md).
+This remains an actively developing local desktop application, not a complete enterprise OSINT platform. The following areas still require additional work or external deployment:
 
-Port, service and technology-stack fingerprinting is intentionally excluded. No active scanning, exploitation, account scraping, credential dumps or access-control bypass.
+- Reverse-image matching is analyst-operated: Smart Intel opens Google Lens, Bing Visual Search or TinEye; it does not upload images to those providers automatically or use a dedicated reverse-search API.
+- SQLCipher, Pillow and Playwright are optional dependencies. SQLCipher key loss makes the database unrecoverable; the encryption migration deliberately retains a plaintext backup until the operator validates recovery and removes it securely.
+- Signed exports prove that the manifest matches the embedded Ed25519 key. The signer is authenticated only when the key fingerprint is trusted independently. RFC 3161 timestamps are optional and only verified when a trusted TSA CA certificate is supplied.
+- Multi-user accounts and case membership apply to this local SQLite store. This is not a networked multi-tenant server, identity federation or remote collaboration service.
+- Scheduled monitoring runs only while the Smart Intel desktop application is open. It does not run as a Windows service, system daemon or hosted scheduler.
+- Proxy routing is opt-in. Tor must already be running and expose a SOCKS5 listener; VPNs are managed by the operating system. A proxy is not an anonymity guarantee and pinned-target lookups resolve the destination locally before connecting.
+- Browser screenshot capture validates public URLs and subrequests, but a browser and proxy are complex network clients; do not treat this as a hardened browser sandbox for untrusted URLs.
+- CourtListener search covers published opinions, not every docket or court record. OpenSanctions results are candidate matches, never a legal determination; confirm names, dates, identifiers and primary sources. Check the provider's current license for your use case.
+- OpenCorporates coverage and HIBP lookups depend on current API access, subscription, provider limits and terms.
+- Historical WHOIS, broad social account discovery, Telegram/dark-web/forum collection, remote team hosting, task assignment/comments, SIEM/SOAR and public signed installers remain out of scope or planned.
+
+No active scanning, exploitation, account-login attempts, credential-dump retrieval, challenge bypass or access-control bypass is provided.
+
+## Optional capabilities setup
+
+Install optional packages only for features you intend to enable:
+
+```bash
+python -m pip install -r requirements-optional.txt
+python -m playwright install chromium
+```
+
+- **Proxy / Tor:** Open AI & network settings and enter an HTTP proxy, HTTPS proxy or SOCKS5 URL such as `socks5://127.0.0.1:9050`. Start/configure Tor separately. The app displays the selected route. VPN routing is managed by the OS, not Smart Intel.
+- **HIBP:** Add a Have I Been Pwned API subscription key in provider settings. A lookup checks only the exact email address entered and saves breach metadata; it does not retrieve passwords or credential dumps.
+- **Company / court / sanctions:** Configure OpenCorporates, CourtListener and OpenSanctions keys in provider settings. Select the corresponding source in the OSINT Sources tab and enter a company name or record query. OpenSanctions uses candidate matching and must be manually reviewed.
+- **Images:** The Evidence tab can inspect local EXIF/GPS metadata, SHA-256 and perceptual hashes. Reverse-image portals open separately; the analyst decides whether to upload an image. Local file comparison and matching do not establish subject identity.
+- **Screenshots:** Enable the evidence vault, then use Capture browser screenshot. Playwright Chromium is required. The captured PNG is imported into the encrypted attachment vault.
+- **Full DB encryption:** Enable full SQLCipher encryption from Evidence & Timeline. Keep the adjacent `.plaintext-backup` in a safe recovery location until you've verified the encrypted database. The SQLCipher key is stored in the OS credential store.
+- **Signed export:** Use Reports → Export signed bundle. An RFC 3161 TSA URL is optional; to mark the timestamp verified, provide the TSA trust CA when prompted. Verify a signer fingerprint from an independent trusted channel.
+- **Accounts / case sharing:** The first launch creates the first administrator. The administrator creates local analyst/viewer accounts and shares cases. Account access is enforced inside the desktop application; protect the local database and device with OS-level controls.
+- **Scheduled monitoring:** Create schedules from the Monitoring tab. The app must remain open to execute them. Schedules only run passive source checks for a domain, public URL or globally routable IP and are stored locally.
+
+The provider adapters use current API endpoints, but external service availability, access, licensing, authentication requirements and rate limits remain controlled by each provider.
 
 ## Local AI analyst
 
