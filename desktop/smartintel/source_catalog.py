@@ -65,7 +65,7 @@ SOURCE_CATALOG: tuple[SourceDescriptor, ...] = (
     SourceDescriptor("rdap", "RDAP", "registration", "public_api", status="implemented"),
     SourceDescriptor("dnsdb", "Farsight DNSDB", "passive_dns", "licensed_api", ("DNSDB_API_KEY",), "licensed"),
     SourceDescriptor("passivetotal", "RiskIQ PassiveTotal", "passive_dns", "licensed_api", ("PASSIVETOTAL_API_KEY",), "licensed"),
-    SourceDescriptor("maigret", "Maigret", "username_presence", "local", status="planned", notes="CLI integration is not yet routed through the workflow engine"),
+    SourceDescriptor("maigret", "Maigret", "username_presence", "local", status="implemented", notes="Analyst-triggered workflow job; outbound public-site checks; proxy routing not yet implemented"),
     SourceDescriptor("public_username_reference", "Public username reference links", "username_presence", "local", status="implemented"),
     SourceDescriptor("sherlock", "Sherlock", "username_presence", "local"),
     SourceDescriptor("whoxy", "Whoxy", "whois_history", "authenticated_api", ("WHOXY_API_KEY",)),
