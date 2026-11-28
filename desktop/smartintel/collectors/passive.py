@@ -133,7 +133,9 @@ def collect_website(url):
     p=urlparse(url)
     if p.scheme not in ('http','https') or not p.hostname: raise ValueError('Enter a valid public http(s) URL.')
     if p.username or p.password: raise ValueError('URLs containing credentials are not accepted.')
-    # Pin the validated DNS answer to the actual TCP connection.\n    r=_get_public_pinned(url)\n    raw=r.content[:MAX_PAGE_BYTES+1]
+    # Pin the validated DNS answer to the actual TCP connection.
+    r=_get_public_pinned(url)
+    raw=r.content[:MAX_PAGE_BYTES+1]
     if len(raw)>MAX_PAGE_BYTES: raw=raw[:MAX_PAGE_BYTES]
     text=raw.decode(r.encoding or 'utf-8',errors='replace'); soup=BeautifulSoup(text,'html.parser')
     semantic_identifiers=_semantic_identifiers(soup)
