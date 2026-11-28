@@ -80,6 +80,10 @@ def encrypt_database(path: str | Path) -> dict:
     key = secrets.token_urlsafe(48)
     source = driver.connect(str(database), timeout=30)
     try:
+        # SQLCipher must explicitly open the legacy plaintext SQLite source
+        # before sqlcipher_export can copy it into the keyed destination.
+        source.execute("PRAGMA key = ''")
+        source.execute("SELECT count(*) FROM sqlite_master").fetchone()
         source.execute(f"ATTACH DATABASE {_quote_sql(str(temporary))} AS encrypted KEY {_quote_sql(key)}")
         source.execute("SELECT sqlcipher_export('encrypted')")
         source.execute("DETACH DATABASE encrypted")
