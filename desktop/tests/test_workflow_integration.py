@@ -6,7 +6,7 @@ def test_all_in_one_registry_uses_implemented_catalogue_adapters():
     registry = build_registry()
     names = {item.name for item in registry.list()}
     assert {"crtsh", "wayback", "virustotal", "urlscan", "otx", "securitytrails", "gdelt"} <= names
-    assert "hibp" not in names
+    assert {"hibp", "opencorporates", "courtlistener", "opensanctions"} <= names
     assert "maigret" not in names
 
 

@@ -2,6 +2,17 @@
 
 This is the primary application. Smart Intel is a cross-platform desktop workspace for lawful, passive public-source research.
 
+## Interface previews
+
+These illustrations show the current dark-first workspace, evidence graph and public-content monitoring areas using fictional sample data. They are **UI previews, not live screenshots from a running installation**.
+
+![Smart Intel desktop workspace preview](assets/readme-workspace.svg)
+
+![Smart Intel identity graph preview](assets/readme-graph.svg)
+
+![Smart Intel social, Telegram and Tor monitoring preview](assets/readme-social-monitoring.svg)
+
+
 ## Run
 
 ```bash
@@ -33,11 +44,58 @@ python -m pytest -q
 - Analysis helpers for deduplication, source-type credibility, heuristic risk triage and entity extraction.
 - JSON, CSV, STIX 2.1 note-bundle, DOCX and PDF export helpers; HTML export from the GUI.
 
-## Important limitations
+## Current limitations
 
-This is an actively developing foundation, not a finished enterprise OSINT suite. Historical WHOIS, personal email/phone lookups, company/court/sanctions sources, reverse-image search, Telegram/dark-web/forum feeds, local AI, WARC/screenshots, attachment vault, fully encrypted database, signature verification UI, multi-user roles, tasks/comments, proxy/Tor, scheduled monitoring, CLI/API, SIEM/SOAR integrations, branded report templates and signed public installers remain incomplete. See [capability matrix](../docs/osint/CAPABILITY-MATRIX.md).
+This remains an actively developing local desktop application, not a complete enterprise OSINT platform. The following areas still require additional work or external deployment:
 
-Port, service and technology-stack fingerprinting is intentionally excluded. No active scanning, exploitation, account scraping, credential dumps or access-control bypass.
+- Reverse-image matching is analyst-operated: Smart Intel opens Google Lens, Bing Visual Search or TinEye; it does not upload images to those providers automatically or use a dedicated reverse-search API.
+- SQLCipher, Pillow and Playwright are optional dependencies. SQLCipher key loss makes the database unrecoverable; the encryption migration deliberately retains a plaintext backup until the operator validates recovery and removes it securely.
+- Signed exports prove that the manifest matches the embedded Ed25519 key. The signer is authenticated only when the key fingerprint is trusted independently. RFC 3161 timestamps are optional and only verified when a trusted TSA CA certificate is supplied.
+- Multi-user accounts and case membership apply to this local SQLite store. This is not a networked multi-tenant server, identity federation or remote collaboration service.
+- Scheduled monitoring runs only while the Smart Intel desktop application is open. It does not run as a Windows service, system daemon or hosted scheduler.
+- Proxy routing is opt-in. Tor must already be running and expose a SOCKS5 listener; VPNs are managed by the operating system. A proxy is not an anonymity guarantee and pinned-target lookups resolve the destination locally before connecting.
+- Browser screenshot capture validates public URLs and subrequests, but a browser and proxy are complex network clients; do not treat this as a hardened browser sandbox for untrusted URLs.
+- CourtListener search covers published opinions, not every docket or court record. OpenSanctions results are candidate matches, never a legal determination; confirm names, dates, identifiers and primary sources. OpenSanctions business use requires checking its paid licensing terms; the connector must not be treated as a free commercial screening service.
+- OpenCorporates coverage and HIBP lookups depend on current API access, subscription, provider limits and terms.
+- Historical WHOIS, broad cross-platform social account discovery, Telegram history/backfill, onion crawling/indexing, remote team hosting, task assignment/comments, SIEM/SOAR and public signed installers remain out of scope or planned.
+
+No active scanning, exploitation, account-login attempts, credential-dump retrieval, challenge bypass or access-control bypass is provided.
+
+## Optional capabilities setup
+
+Install optional packages only for features you intend to enable:
+
+```bash
+python -m pip install -r requirements-optional.txt
+python -m playwright install chromium
+```
+
+- **Proxy / Tor:** Open AI & network settings and enter an HTTP proxy, HTTPS proxy or SOCKS5 URL such as `socks5h://127.0.0.1:9050` for onion services. Start/configure Tor separately. The app displays the selected route. VPN routing is managed by the OS, not Smart Intel.
+- **HIBP:** Add a Have I Been Pwned API subscription key in provider settings. A lookup checks only the exact email address entered and saves breach metadata; it does not retrieve passwords or credential dumps. Results include the required provider attribution.
+- **Company / court / sanctions:** Configure OpenCorporates, CourtListener and OpenSanctions keys in provider settings. Select the corresponding source in the OSINT Sources tab and enter a company name or record query. OpenSanctions uses candidate matching and must be manually reviewed.
+- **Images:** The Evidence tab can inspect local EXIF/GPS metadata, SHA-256 and perceptual hashes. Reverse-image portals open separately; the analyst decides whether to upload an image. Local file comparison and matching do not establish subject identity. HIBP attribution is included in result evidence under CC BY 4.0; provider terms still apply.
+- **Screenshots:** Enable the evidence vault, then use Capture browser screenshot. Playwright Chromium is required. The captured PNG is imported into the encrypted attachment vault.
+- **Full DB encryption:** Enable full SQLCipher encryption from Evidence & Timeline. Keep the adjacent `.plaintext-backup` in a safe recovery location until you've verified the encrypted database. The SQLCipher key is stored in the OS credential store.
+- **Signed export:** Use Reports → Export signed bundle. An RFC 3161 TSA URL is optional; to mark the timestamp verified, provide the TSA trust CA when prompted. Verify a signer fingerprint from an independent trusted channel.
+- **Accounts / case sharing:** The first launch creates the first administrator. The administrator creates local analyst/viewer accounts and shares cases. Account access is enforced inside the desktop application; protect the local database and device with OS-level controls.
+- **Scheduled monitoring:** Create domain/IP/URL schedules from the Monitoring tab. The app must remain open to execute them.
+- **Social / Telegram / Tor:** Open the Social / Telegram / Tor tab. Mastodon monitors one public account timeline; Bluesky searches public posts; RSS/Atom accepts public HTTPS feed URLs (including YouTube channel feeds). Set optional comma-separated keywords to keep matching items only. For Telegram, create a bot with [BotFather](https://t.me/BotFather), add it to the public channels, then save its token in AI & network settings. Create one Telegram monitor containing all channel usernames because the Bot API has one update cursor per bot token. It receives new `channel_post` / `edited_channel_post` updates only; it does not backfill channel history, and Telegram retains pending updates for at most 24 hours. `getUpdates` and Telegram webhooks are mutually exclusive; disable the webhook for the bot before polling. For onion pages, configure a local Tor SOCKS5H proxy such as `socks5h://127.0.0.1:9050` and add one exact v3 `.onion` page. Smart Intel does not launch Tor. It fetches only that page, blocks redirects, and does not crawl links or download files.
+
+The provider adapters use current API endpoints, but external service availability, access, licensing, authentication requirements and rate limits remain controlled by each provider.
+
+## Social media, Telegram and Tor monitoring
+
+The **Social / Telegram / Tor** tab adds a separate public-content monitoring workflow:
+
+- **Mastodon:** fetches the public statuses of one explicitly supplied account on its home instance and keeps only posts whose visibility is `public`. It does not perform a global federated search or read followers, direct messages or private posts. See the [Mastodon public-data guide](https://docs.joinmastodon.org/client/public/) and [account status API](https://docs.joinmastodon.org/methods/accounts/).
+- **Bluesky:** searches public posts through the public AppView endpoint. Coverage, ranking and availability are controlled by the service.
+- **RSS / Atom:** accepts public HTTPS RSS or Atom feeds. This can include YouTube channel feeds or another feed URL the analyst is authorized to monitor; the app does not crawl linked pages.
+- **Telegram:** uses the official [Telegram Bot API](https://core.telegram.org/bots/api) `getUpdates` method and monitors new channel posts for public channel usernames you specify. The bot must be added to those channels. It does not log in as a user, read DMs, join groups, or backfill old history. Telegram retains pending updates for up to 24 hours; `getUpdates` cannot be used while a webhook is set. See the [Telegram Bot FAQ](https://core.telegram.org/bots/faq). Use one dedicated Smart Intel bot token and one monitor with a comma-separated list of public channels, so its global update offset is not split between monitors or another bot application.
+- **Tor onion page:** fetches one exact, analyst-configured v3 `.onion` URL through a local `socks5h://` proxy. The proxy must be a Tor SOCKS listener on loopback. No onion crawling, marketplace searches, directory indexing, account access, form submission, file downloads or credential-dump collection is implemented.
+
+All sources can apply optional comma-separated keyword matching. Each unique post or page snapshot is saved as case evidence and deduplicated by its source item ID or content hash. The scheduler is local and runs only while Smart Intel is open. The minimum interval is one hour.
+
+This is not comprehensive surveillance of every social network or every Tor service. X, Instagram, Facebook, private communities and many other platforms require their own approved API access and are not represented as implemented here. Public source coverage, service terms and API availability can change. Use only sources and targets you are authorized to monitor. A Tor route does not guarantee anonymity.
 
 ## Local AI analyst
 
@@ -54,11 +112,11 @@ See [BUILDING.md](BUILDING.md). Build separately on each target OS; PyInstaller 
 ### Evidence vault and case audit
 
 - Evidence tab supports opt-in encryption of evidence text and imported attachment payloads using Fernet; the random key is stored through the operating-system credential store (keyring).
-- Screenshot files can be imported as evidence attachments. The application does not yet render/capture browser screenshots automatically.
+- Public browser screenshots can be captured with Playwright Chromium and are imported into the encrypted attachment vault when it is enabled; screenshots can also be imported from disk.
 - Local files can be wrapped in WARC/1.1 resource records; a public HTTP(S) URL can be fetched once and stored as a WARC response record. Redirects are not followed.
 - Attachment exports verify both ciphertext and plaintext SHA-256 hashes before returning the decrypted bytes.
 - Workflow lifecycle events are persisted into a hash-linked SQLite audit-event chain and can be verified from the Evidence tab.
-- Important boundary: this is application-level encryption for evidence payloads and attachments, not full SQLite database encryption. Case names and metadata remain plaintext. A local hash chain detects accidental or partial edits but cannot stop an attacker with filesystem/database access from rewriting the entire chain. Use independently held signing keys and external timestamp/immutable storage for that threat model.
+- Important boundary: full-database SQLCipher encryption is now an optional migration. Until SQLCipher is enabled, this is application-level encryption for evidence payloads and attachments, not full database encryption. The migration retains a plaintext backup; case metadata is protected only after migration. A local hash chain detects accidental or partial edits but cannot stop an attacker with filesystem/database access from rewriting the entire chain. Use independently held signing keys and external timestamp/immutable storage for that threat model.
 - Losing the OS credential-store key makes encrypted evidence unrecoverable; the UI refuses to silently replace a missing key.
 
 

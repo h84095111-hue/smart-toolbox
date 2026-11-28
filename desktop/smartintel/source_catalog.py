@@ -45,9 +45,9 @@ SOURCE_CATALOG: tuple[SourceDescriptor, ...] = (
     SourceDescriptor("abuseipdb", "AbuseIPDB", "ip_reputation", "authenticated_api", ("SMART_INTEL_ABUSEIPDB_API_KEY",), "implemented"),
     SourceDescriptor("shodan", "Shodan", "ip_metadata", "authenticated_api", ("SMART_INTEL_SHODAN_API_KEY",), "implemented", "Existing host metadata only"),
     SourceDescriptor("censys", "Censys", "ip_metadata", "authenticated_api", ("SMART_INTEL_CENSYS_API_KEY",), "implemented", "Existing host metadata only"),
-    SourceDescriptor("hibp", "Have I Been Pwned", "breach_notification", "authenticated_api", ("SMART_INTEL_HIBP_API_KEY",), notes="Authenticated, terms-compliant account/domain workflows; no credential dumps"),
-    SourceDescriptor("opencorporates", "OpenCorporates", "corporate_records", "authenticated_api", ("OPENCORPORATES_API_KEY",)),
-    SourceDescriptor("opensanctions", "OpenSanctions", "sanctions_pep", "public_api"),
+    SourceDescriptor("hibp", "Have I Been Pwned", "breach_notification", "authenticated_api", ("SMART_INTEL_HIBP_API_KEY",), "implemented", "Exact analyst-requested email breach metadata; requires a valid subscription key; no credential dumps"),
+    SourceDescriptor("opencorporates", "OpenCorporates", "corporate_records", "authenticated_api", ("SMART_INTEL_OPENCORPORATES_API_KEY",), "implemented", "API token and applicable provider terms required"),
+    SourceDescriptor("opensanctions", "OpenSanctions", "sanctions_pep", "authenticated_api", ("SMART_INTEL_OPENSANCTIONS_API_KEY",), "implemented", "POST /match query-by-example; name-only candidates require human review; business licensing may apply"),
     SourceDescriptor("company_house", "UK Companies House", "corporate_records", "authenticated_api", ("COMPANIES_HOUSE_API_KEY",)),
     SourceDescriptor("sec_edgar", "SEC EDGAR", "corporate_filings", "public_api"),
     SourceDescriptor("gleif", "GLEIF LEI", "corporate_records", "public_api"),
@@ -55,7 +55,7 @@ SOURCE_CATALOG: tuple[SourceDescriptor, ...] = (
     SourceDescriptor("eu_sanctions", "EU Sanctions Map", "sanctions", "public_web"),
     SourceDescriptor("ofac", "OFAC Sanctions Search", "sanctions", "public_web"),
     SourceDescriptor("uk_sanctions", "UK Sanctions List", "sanctions", "public_web"),
-    SourceDescriptor("courtlistener", "CourtListener", "court_records", "authenticated_api", ("COURTLISTENER_API_TOKEN",)),
+    SourceDescriptor("courtlistener", "CourtListener", "court_records", "authenticated_api", ("SMART_INTEL_COURTLISTENER_API_KEY",), "implemented", "Published-opinion search only; not complete docket coverage"),
     SourceDescriptor("pacer", "PACER", "court_records", "licensed_api", ("PACER_CREDENTIALS",), "licensed", "Fees and account terms apply"),
     SourceDescriptor("whoisxml", "WhoisXML API", "whois_history", "licensed_api", ("WHOISXML_API_KEY",), "licensed"),
     SourceDescriptor("domain_tools", "DomainTools", "whois_history", "licensed_api", ("DOMAINTOOLS_API_KEY",), "licensed"),
@@ -65,15 +65,18 @@ SOURCE_CATALOG: tuple[SourceDescriptor, ...] = (
     SourceDescriptor("rdap", "RDAP", "registration", "public_api", status="implemented"),
     SourceDescriptor("dnsdb", "Farsight DNSDB", "passive_dns", "licensed_api", ("DNSDB_API_KEY",), "licensed"),
     SourceDescriptor("passivetotal", "RiskIQ PassiveTotal", "passive_dns", "licensed_api", ("PASSIVETOTAL_API_KEY",), "licensed"),
-    SourceDescriptor("maigret", "Maigret", "username_presence", "local", status="implemented", notes="Analyst-triggered workflow job; outbound public-site checks; proxy routing not yet implemented"),
+    SourceDescriptor("maigret", "Maigret", "username_presence", "local", status="implemented", notes="Analyst-triggered public-site check; configured HTTP/SOCKS5 proxy applied when set"),
     SourceDescriptor("public_username_reference", "Public username reference links", "username_presence", "local", status="implemented"),
     SourceDescriptor("sherlock", "Sherlock", "username_presence", "local"),
     SourceDescriptor("whoxy", "Whoxy", "whois_history", "authenticated_api", ("WHOXY_API_KEY",)),
     SourceDescriptor("google_cse", "Google Programmable Search", "web_search", "authenticated_api", ("GOOGLE_CSE_API_KEY", "GOOGLE_CSE_CX")),
     SourceDescriptor("bing_search", "Bing Web Search", "web_search", "authenticated_api", ("BING_SEARCH_API_KEY",)),
-    SourceDescriptor("telegram_api", "Telegram API", "social_monitoring", "authenticated_api", ("TELEGRAM_API_ID", "TELEGRAM_API_HASH")),
+    SourceDescriptor("telegram_api", "Telegram Bot API", "social_monitoring", "authenticated_api", (), "implemented", "Bot token stored in OS keyring; getUpdates channel_post/edited_channel_post for analyst-specified public channels; updates only, no history/backfill; one bot update cursor"),
     SourceDescriptor("reddit", "Reddit API", "social_monitoring", "authenticated_api", ("REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET")),
-    SourceDescriptor("mastodon", "Mastodon API", "social_monitoring", "public_api"),
+    SourceDescriptor("mastodon", "Mastodon public account statuses", "social_monitoring", "public_api", status="implemented", notes="One explicitly supplied account; visibility=public only; no global federated search"),
+    SourceDescriptor("bluesky_public_search", "Bluesky public search", "social_monitoring", "public_api", status="implemented", notes="Public AppView search endpoint; current service limits apply"),
+    SourceDescriptor("rss_atom_feed", "Public RSS / Atom feed", "social_monitoring", "public_api", status="implemented", notes="User-supplied public HTTPS feed URL; no linked-page crawling"),
+    SourceDescriptor("tor_onion_public_page", "Tor v3 onion public page", "dark_web_monitoring", "local", status="implemented", notes="One exact v3 .onion page via local Tor SOCKS5H; no crawling, downloads or marketplace search"),
     SourceDescriptor("gdelt", "GDELT", "news_monitoring", "public_api", status="implemented"),
     SourceDescriptor("public_website_metadata", "Public website metadata", "web_analysis", "public_web", status="implemented"),
     SourceDescriptor("email_authorized_check_guidance", "Authorized breach-check guidance", "breach_notification", "local", status="implemented"),
@@ -140,6 +143,14 @@ class AdapterManager:
         self.sleep = sleep
         self.clock = clock
         self.health: dict[str, AdapterHealth] = {}
+        self._lock = threading.RLock()
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state.pop("_lock", None)
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
         self._lock = threading.RLock()
 
     def call(self, source_id: str, adapter: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:

@@ -9,6 +9,8 @@ from ..workflow import CollectorRegistry, CollectorSpec, ExecutionPolicy, run_wo
 from ..source_catalog import AdapterManager, SOURCE_CATALOG
 from .passive import collect_domain, collect_ip, collect_website
 from . import passive_sources as src
+from ..hibp import check_email_breaches
+from ..advanced_sources import opencorporates_search, courtlistener_search, opensanctions_search
 
 _ADAPTER_MANAGER = AdapterManager(retries=1, base_delay=0.2, failure_threshold=3, cooldown_seconds=90.0)
 
@@ -59,6 +61,10 @@ def build_registry(*, misp_url: str = "", adapter_manager: AdapterManager | None
     add("public_website_metadata", collect_website, target_types=("url",),
         args=lambda target, context: (context["original_target"],))
     add("email_authorized_check_guidance", src.breach_check_guidance, target_types=("email",))
+    add("hibp", check_email_breaches, target_types=("email",))
+    add("opencorporates", opencorporates_search, target_types=("record_query",))
+    add("courtlistener", courtlistener_search, target_types=("record_query",))
+    add("opensanctions", opensanctions_search, target_types=("record_query",))
     add("crtsh", src.certificate_transparency, target_types=("domain", "url"))
     add("wayback", src.wayback, target_types=("domain", "url"),
         args=lambda target, context: (context.get("original_target", target),))
@@ -82,7 +88,7 @@ def build_registry(*, misp_url: str = "", adapter_manager: AdapterManager | None
     return registry
 
 
-def run_all(target, misp_url=""):
+def run_all(target, misp_url="", cancellation=None):
     raw = (target or "").strip()
     if not raw:
         raise ValueError("Enter a domain, public IP address, email, username or website URL.")
@@ -99,6 +105,7 @@ def run_all(target, misp_url=""):
         context={"original_target": raw, "target_type": target_type},
         target_type=target_type,
         policy=ExecutionPolicy(max_workers=6, timeout_seconds=60.0, allow_active=False),
+        cancellation=cancellation,
     )
     failures = []
     skipped = [f"{row['collector']}: {row['reason']}" for row in result["skipped"]]
@@ -123,12 +130,15 @@ def run_all(target, misp_url=""):
         "skipped": skipped, "events": result["events"], "status": result["status"],
     }
 
-def run_selected(target, source_id, misp_url=""):
+def run_selected(target, source_id, misp_url="", cancellation=None):
     """Execute one catalogue-backed source through the shared workflow."""
     raw = (target or "").strip()
     if not raw:
         raise ValueError("Enter a lookup target.")
-    target_type, normalized, _ = _target_kind(raw)
+    if source_id in {"opencorporates","courtlistener","opensanctions"}:
+        target_type, normalized = "record_query", raw
+    else:
+        target_type, normalized, _ = _target_kind(raw)
     if target_type == "url":
         parsed = urlparse(raw if "://" in raw else "https://" + raw)
         if not parsed.hostname:
@@ -141,6 +151,7 @@ def run_selected(target, source_id, misp_url=""):
         target_type=target_type,
         selected=(source_id,),
         policy=ExecutionPolicy(max_workers=1, timeout_seconds=45.0, allow_active=False),
+        cancellation=cancellation,
     )
     return {
         "run_id": result["run_id"], "target": raw, "findings": result["findings"],

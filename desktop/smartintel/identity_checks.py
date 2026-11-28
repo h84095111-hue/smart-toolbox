@@ -108,6 +108,7 @@ def check_username(
     timeout_per_site: int = 15,
     process_timeout: int = 900,
     executable: str = "maigret",
+    proxy_url: str | None = None,
 ) -> dict[str, Any]:
     """Check a username against Maigret's public site database, without API keys."""
     username = _valid_username(username)
@@ -115,6 +116,8 @@ def check_username(
         raise ValueError("max_sites must be between 1 and 3000.")
     if not 5 <= int(timeout_per_site) <= 60:
         raise ValueError("timeout_per_site must be between 5 and 60 seconds.")
+    from .network import configured_proxy_url, validate_proxy_url
+    selected_proxy = validate_proxy_url(configured_proxy_url() if proxy_url is None else proxy_url)
     binary = shutil.which(executable)
     if not binary:
         return {
@@ -140,6 +143,8 @@ def check_username(
             "--no-recursion",
             "--no-autoupdate",
         ]
+        if selected_proxy:
+            command.extend(["--proxy", selected_proxy])
         started = time.monotonic()
         try:
             completed = subprocess.run(
