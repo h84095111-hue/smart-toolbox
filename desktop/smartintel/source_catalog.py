@@ -34,16 +34,17 @@ class SourceDescriptor:
 
 # Honest integration roadmap: planned/licensed entries are metadata only.
 SOURCE_CATALOG: tuple[SourceDescriptor, ...] = (
+    SourceDescriptor("misp", "MISP", "threat_intelligence", "authenticated_api", ("SMART_INTEL_MISP_API_KEY",), "implemented", "Operator-managed instance URL required"),
     SourceDescriptor("crtsh", "crt.sh", "certificate_transparency", "public_api", status="implemented"),
     SourceDescriptor("wayback", "Internet Archive Wayback", "web_history", "public_api", status="implemented"),
-    SourceDescriptor("virustotal", "VirusTotal", "threat_intelligence", "authenticated_api", ("VIRUSTOTAL_API_KEY",), "implemented"),
-    SourceDescriptor("urlscan", "urlscan.io", "web_analysis", "authenticated_api", ("URLSCAN_API_KEY",), "implemented"),
-    SourceDescriptor("otx", "AlienVault OTX", "threat_intelligence", "authenticated_api", ("OTX_API_KEY",), "implemented"),
-    SourceDescriptor("securitytrails", "SecurityTrails", "passive_dns", "authenticated_api", ("SECURITYTRAILS_API_KEY",), "implemented"),
-    SourceDescriptor("abuseipdb", "AbuseIPDB", "ip_reputation", "authenticated_api", ("ABUSEIPDB_API_KEY",), "implemented"),
-    SourceDescriptor("shodan", "Shodan", "ip_metadata", "authenticated_api", ("SHODAN_API_KEY",), "implemented", "Existing host metadata only"),
-    SourceDescriptor("censys", "Censys", "ip_metadata", "authenticated_api", ("CENSYS_API_ID", "CENSYS_API_SECRET"), "implemented", "Existing host metadata only"),
-    SourceDescriptor("hibp", "Have I Been Pwned", "breach_notification", "authenticated_api", ("HIBP_API_KEY",), notes="Authenticated, terms-compliant account/domain workflows; no credential dumps"),
+    SourceDescriptor("virustotal", "VirusTotal", "threat_intelligence", "authenticated_api", ("SMART_INTEL_VIRUSTOTAL_API_KEY",), "implemented"),
+    SourceDescriptor("urlscan", "urlscan.io", "web_analysis", "authenticated_api", ("SMART_INTEL_URLSCAN_API_KEY",), "implemented"),
+    SourceDescriptor("otx", "AlienVault OTX", "threat_intelligence", "authenticated_api", ("SMART_INTEL_OTX_API_KEY",), "implemented"),
+    SourceDescriptor("securitytrails", "SecurityTrails", "passive_dns", "authenticated_api", ("SMART_INTEL_SECURITYTRAILS_API_KEY",), "implemented"),
+    SourceDescriptor("abuseipdb", "AbuseIPDB", "ip_reputation", "authenticated_api", ("SMART_INTEL_ABUSEIPDB_API_KEY",), "implemented"),
+    SourceDescriptor("shodan", "Shodan", "ip_metadata", "authenticated_api", ("SMART_INTEL_SHODAN_API_KEY",), "implemented", "Existing host metadata only"),
+    SourceDescriptor("censys", "Censys", "ip_metadata", "authenticated_api", ("SMART_INTEL_CENSYS_API_KEY",), "implemented", "Existing host metadata only"),
+    SourceDescriptor("hibp", "Have I Been Pwned", "breach_notification", "authenticated_api", ("SMART_INTEL_HIBP_API_KEY",), notes="Authenticated, terms-compliant account/domain workflows; no credential dumps"),
     SourceDescriptor("opencorporates", "OpenCorporates", "corporate_records", "authenticated_api", ("OPENCORPORATES_API_KEY",)),
     SourceDescriptor("opensanctions", "OpenSanctions", "sanctions_pep", "public_api"),
     SourceDescriptor("company_house", "UK Companies House", "corporate_records", "authenticated_api", ("COMPANIES_HOUSE_API_KEY",)),
@@ -80,7 +81,7 @@ SOURCE_CATALOG: tuple[SourceDescriptor, ...] = (
     SourceDescriptor("tesseract", "Tesseract OCR", "document_analysis", "local"),
     SourceDescriptor("yandex_images", "Yandex Images", "reverse_image", "public_web", status="manual", notes="Operator-mediated search link; no automated face identification"),
     SourceDescriptor("google_lens", "Google Lens", "reverse_image", "public_web", status="manual", notes="Operator-mediated search link"),
-    SourceDescriptor("hibp_domain", "HIBP Domain Search", "breach_notification", "authenticated_api", ("HIBP_API_KEY",), notes="Requires domain verification"),
+    SourceDescriptor("hibp_domain", "HIBP Domain Search", "breach_notification", "authenticated_api", ("SMART_INTEL_HIBP_API_KEY",), notes="Requires domain verification"),
 )
 
 
