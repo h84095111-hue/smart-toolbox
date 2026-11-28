@@ -20,6 +20,7 @@ from .image_intel import inspect_image, compare_images
 from .signing import signed_export, verify_signed_export
 from .monitoring_panel import MonitoringPanel
 from .network import proxy_label, validate_proxy_url
+from .workflow import CollectorRegistry, CollectorSpec, ExecutionPolicy, CancellationToken, run_workflow
 
 STYLE="""QWidget{background:#0a1020;color:#e7ecf7;font-family:Segoe UI,Inter,Arial;font-size:13px;selection-background-color:#6558df;selection-color:#fff}
 QMainWindow,QDialog{background:#0a1020}
@@ -128,7 +129,7 @@ class MainWindow(QMainWindow):
     def collect_tab(self):
         w=QWidget(); v=QVBoxLayout(w); intro=QLabel("Passive public-source collection. Select a target type and run a lookup."); intro.setObjectName("muted"); v.addWidget(intro)
         r=QHBoxLayout(); self.target_type=QComboBox(); self.target_type.addItems(["Domain","Public IP address","Website URL"]); self.target=QLineEdit(); self.target.setPlaceholderText("example.com"); r.addWidget(self.target_type); r.addWidget(self.target,1)
-        self.collect_btn=QPushButton("Collect evidence"); self.collect_btn.setObjectName("primary"); self.collect_btn.clicked.connect(self.collect); r.addWidget(self.collect_btn); self.all_scan_btn=QPushButton("All-in-One scan"); self.all_scan_btn.clicked.connect(self.run_all_from_collect); r.addWidget(self.all_scan_btn); v.addLayout(r)
+        self.collect_btn=QPushButton("Collect evidence"); self.collect_btn.setObjectName("primary"); self.collect_btn.clicked.connect(self.collect); r.addWidget(self.collect_btn); self.all_scan_btn=QPushButton("All-in-One scan"); self.all_scan_btn.clicked.connect(self.run_all_from_collect); r.addWidget(self.all_scan_btn); self.stop_collect_btn=QPushButton("Stop collector"); self.stop_collect_btn.setEnabled(False); self.stop_collect_btn.clicked.connect(self.stop_collect); r.addWidget(self.stop_collect_btn); v.addLayout(r)
         self.collect_log=QPlainTextEdit(); self.collect_log.setReadOnly(True); self.collect_log.setPlaceholderText("Collection output appears here…"); v.addWidget(self.collect_log,1)
         hint=QLabel("DNS · RDAP · TLS certificate · public website metadata, headers and links. No active scanning."); hint.setObjectName("muted"); v.addWidget(hint); return w
     def run_all_from_collect(self):
@@ -287,15 +288,41 @@ class MainWindow(QMainWindow):
         if not self.require_case(write=True):return
         value=self.target.text().strip()
         if not value:return
-        fn={"Domain":collect_domain,"Public IP address":collect_ip,"Website URL":collect_website}[self.target_type.currentText()]
-        self.collect_btn.setEnabled(False); self.status.setText("Collecting…")
-        self.worker=Worker(fn,value); self.worker.done.connect(self.collection_done); self.worker.failed.connect(self.failed); self.worker.finished.connect(lambda:self.collect_btn.setEnabled(True)); self.worker.start()
-    def collection_done(self,findings):
+        selection=self.target_type.currentText()
+        fn={"Domain":collect_domain,"Public IP address":collect_ip,"Website URL":collect_website}[selection]
+        target_type={"Domain":"domain","Public IP address":"ip","Website URL":"url"}[selection]
+        registry=CollectorRegistry()
+        registry.register(CollectorSpec("single_passive_collection",
+            run=lambda target, context: fn(target), mode="passive", target_types=(target_type,)))
+        self.collect_cancellation=CancellationToken()
+        self.collect_btn.setEnabled(False); self.stop_collect_btn.setEnabled(True); self.status.setText("Collecting in an isolated process…")
+        self.worker=Worker(lambda: run_workflow(value,registry,target_type=target_type,
+            policy=ExecutionPolicy(max_workers=1,timeout_seconds=60.0,allow_active=False),
+            cancellation=self.collect_cancellation))
+        self.worker.done.connect(self.collection_done); self.worker.failed.connect(self.failed)
+        self.worker.finished.connect(lambda:(self.collect_btn.setEnabled(True),self.stop_collect_btn.setEnabled(False)))
+        self.worker.start()
+
+    def stop_collect(self):
+        token=getattr(self,"collect_cancellation",None)
+        if token:
+            token.cancel()
+            self.status.setText("Stop requested; collector process is being terminated…")
+
+    def collection_done(self,result):
         if not self.require_case(write=True):return
-        for f in findings:
-            item=Evidence(self.case_id,f.source,f.title,f.url,f.value,confidence=f.confidence,kind="OSINT finding"); self.store.add_evidence(item); append_audit(APP_DIR/"audit.jsonl",{"action":"evidence_added","case_id":self.case_id,"evidence_id":item.id,"source":item.source,"title":item.title})
-            self.collect_log.appendPlainText(f"\n[{f.confidence}] {f.title}\nSource: {f.source}\nURL: {f.url}\n{f.value[:4500]}")
-        self.status.setText(f"Collected {len(findings)} findings"); self.refresh_evidence(); self.graph_panel.refresh()
+        findings=result.get("findings",[]) if isinstance(result,dict) else []
+        for finding in findings:
+            source=finding.get("source","Passive collection")
+            title=finding.get("title","OSINT finding")
+            url=finding.get("url","")
+            content=finding.get("content","")
+            confidence=finding.get("confidence","Low")
+            item=Evidence(self.case_id,source,title,url,content,confidence=confidence,kind=finding.get("kind","OSINT finding"))
+            self.store.add_evidence(item); append_audit(APP_DIR/"audit.jsonl",{"action":"evidence_added","case_id":self.case_id,"evidence_id":item.id,"source":item.source,"title":item.title})
+            self.collect_log.appendPlainText(f"\n[{confidence}] {title}\nSource: {source}\nURL: {url}\n{content[:4500]}")
+        self.status.setText("Workflow "+result.get("status","completed")+" · "+str(len(findings))+" findings")
+        self.refresh_evidence(); self.graph_panel.refresh()
     def failed(self,msg):self.status.setText("Task failed"); QMessageBox.warning(self,"Task failed",msg)
     def refresh_evidence(self):
         if not self.case_id:return
