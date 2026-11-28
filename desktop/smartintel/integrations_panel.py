@@ -2,8 +2,7 @@
 import json
 from PyQt6.QtCore import QThread,pyqtSignal
 from PyQt6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QLabel,QComboBox,QLineEdit,QPushButton,QPlainTextEdit,QMessageBox,QDialog,QTableWidget,QTableWidgetItem,QHeaderView
-from .collectors import passive_sources as src
-from .collectors.all_in_one import run_all
+from .collectors.all_in_one import run_all, run_selected
 from .workflow import run_identity_workflow
 from .source_catalog import list_sources
 
@@ -138,9 +137,35 @@ class IntegrationsPanel(QWidget):
     def run_lookup(self):
         value=self.target.text().strip()
         if not value: QMessageBox.information(self,"Target required","Enter a lookup value."); return
-        mapping={"Certificate transparency (crt.sh)":(src.certificate_transparency,(value,)),"Wayback Machine":(src.wayback,(value,)),"VirusTotal domain":(src.virustotal_domain,(value,)),"AbuseIPDB public IP":(src.abuseipdb_ip,(value,)),"urlscan.io domain":(src.urlscan_search,(value,)),"AlienVault OTX domain":(src.otx_domain,(value,)),"Shodan existing IP data":(src.shodan_host,(value,)),"Censys existing IP data":(src.censys_host,(value,)),"SecurityTrails passive DNS":(src.passive_dns_history,(value,)),"GDELT public news":(src.gdelt_news,(value,)),"Public username reference links":(src.public_username_reference,(value,)),"Authorized breach-check workflow":(src.breach_check_guidance,(value,)),"MISP exact IOC search":(src.misp_search,(self.misp.text().strip(),value))}
-        fn,args=mapping[self.source.currentText()]; self.set_busy(True); self.output.setPlainText("Selected source lookup running…")
-        self.task=_Task(fn,*args); self.task.done.connect(self.complete); self.task.failed.connect(self.fail); self.task.finished.connect(lambda:self.set_busy(False)); self.task.start()
+        source_ids={
+            "Certificate transparency (crt.sh)":"crtsh",
+            "Wayback Machine":"wayback",
+            "VirusTotal domain":"virustotal",
+            "AbuseIPDB public IP":"abuseipdb",
+            "urlscan.io domain":"urlscan",
+            "AlienVault OTX domain":"otx",
+            "Shodan existing IP data":"shodan",
+            "Censys existing IP data":"censys",
+            "SecurityTrails passive DNS":"securitytrails",
+            "GDELT public news":"gdelt",
+            "Public username reference links":"public_username_reference",
+            "Authorized breach-check workflow":"email_authorized_check_guidance",
+            "MISP exact IOC search":"misp_exact_ioc",
+        }
+        source_id=source_ids[self.source.currentText()]
+        self.set_busy(True); self.output.setPlainText("Selected source workflow running…")
+        self.task=_Task(run_selected,value,source_id,self.misp.text().strip())
+        self.task.done.connect(self.selected_complete); self.task.failed.connect(self.fail)
+        self.task.finished.connect(lambda:self.set_busy(False)); self.task.start()
+    def selected_complete(self,result):
+        self.workflow_ready.emit(result)
+        findings=result.get("findings",[])
+        if findings:
+            self.complete(findings[0])
+            return
+        details=result.get("failures",[])+result.get("skipped",[])
+        self.latest=None; self.add_button.setEnabled(False)
+        self.output.setPlainText("No finding returned.\\n"+("\\n".join(details) if details else "The selected source is not registered for this target type or requires configuration."))
     def complete(self,item):
         self.latest=item; self.output.setPlainText(f"{item['title']}\nSource: {item['source']}\nURL: {item['url']}\nConfidence: {item['confidence']}\n\n{item['content']}"); self.add_button.setEnabled(True)
     def fail(self,msg): self.output.setPlainText("Lookup failed: "+msg); self.add_button.setEnabled(False)
