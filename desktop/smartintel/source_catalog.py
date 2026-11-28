@@ -141,6 +141,14 @@ class AdapterManager:
         self.clock = clock
         self.health: dict[str, AdapterHealth] = {}
         self._lock = threading.RLock()
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state.pop("_lock", None)
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self._lock = threading.RLock()
 
     def call(self, source_id: str, adapter: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         with self._lock:
