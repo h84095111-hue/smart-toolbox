@@ -2,6 +2,17 @@
 
 This is the primary application. Smart Intel is a cross-platform desktop workspace for lawful, passive public-source research.
 
+## Interface previews
+
+These illustrations show the current dark-first workspace, evidence graph and public-content monitoring areas using fictional sample data. They are **UI previews, not live screenshots from a running installation**.
+
+![Smart Intel desktop workspace preview](assets/readme-workspace.svg)
+
+![Smart Intel identity graph preview](assets/readme-graph.svg)
+
+![Smart Intel social, Telegram and Tor monitoring preview](assets/readme-social-monitoring.svg)
+
+
 ## Run
 
 ```bash
