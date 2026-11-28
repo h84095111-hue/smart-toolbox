@@ -18,7 +18,7 @@
 - Optional provider lookups: crt.sh certificate transparency, Wayback CDX, VirusTotal, AbuseIPDB, urlscan.io, AlienVault OTX, Shodan existing-host data, Censys existing-host data, SecurityTrails passive DNS, GDELT news and user-configured MISP exact-IOC search.
 - Public username profile reference links (no account scraping or identity verification).
 - Authorized breach-check workflow guidance; no stolen credential dumps.
-- Interactive evidence/identity graph with source provenance and optional local Ollama analysis; OpenAI, Gemini and Claude remain optional cloud providers.
+- Interactive evidence/identity graph with provenance, same-record identifier correlation, mouse-wheel zoom and drag navigation.\n- Evidence-derived explainable false-positive caution factors; still an uncalibrated heuristic, never a statistical probability.\n- Local Ollama and cloud AI analysis receive the structured graph, risk factors and evidence context.\n- Passive collection CLI: `python -m smartintel.cli <target> --output findings.json`.
 - Explainable false-positive risk index (uncalibrated heuristic, not a statistical probability).
 - Evidence deduplication, heuristic source credibility and transparent triage scoring helpers.
 - Hash-linked JSONL audit journal, SHA-256 attachment hashing, optional Fernet encryption and Ed25519 signing helpers.
