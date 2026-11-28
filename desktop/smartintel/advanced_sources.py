@@ -74,7 +74,7 @@ def courtlistener_search(query: str) -> dict:
         "CourtListener API", url)
 
 
-def opensanctions_search(query: str, *, dataset: str = "sanctions", schema: str = "Person") -> dict:
+def opensanctions_search(query: str, *, dataset: str = "default", schema: str = "Person") -> dict:
     """Screen an analyst-supplied name using OpenSanctions query-by-example matching.
 
     A name-only query is inherently ambiguous. The score ranks candidates and
@@ -84,7 +84,7 @@ def opensanctions_search(query: str, *, dataset: str = "sanctions", schema: str 
     value = (query or "").strip()
     if len(value) < 2 or len(value) > 160:
         raise ValueError("Enter a name between 2 and 160 characters.")
-    if dataset not in {"sanctions", "peps", "default"}:
+    if dataset not in {"default", "sanctions", "peps"}:
         raise ValueError("Unsupported OpenSanctions matching dataset.")
     if schema not in {"Person", "LegalEntity", "Company", "Organization", "Vessel"}:
         raise ValueError("Unsupported entity schema.")
@@ -101,7 +101,7 @@ def opensanctions_search(query: str, *, dataset: str = "sanctions", schema: str 
         }
     }
     params = {"limit": 20, "algorithm": "best"}
-    if dataset == "sanctions":
+    if dataset == "default":
         params["topics"] = ["sanction", "sanction.linked", "debarment"]
     elif dataset == "peps":
         params["topics"] = ["role.pep", "role.rca"]
@@ -119,7 +119,7 @@ def opensanctions_search(query: str, *, dataset: str = "sanctions", schema: str 
         matches.append({k: row.get(k) for k in (
             "id", "caption", "schema", "score", "datasets", "properties", "referents"
         ) if k in row})
-    return _finding("OpenSanctions candidate screening",
+    return _finding("OpenSanctions sanctions/PEP candidate screening",
         {"query": value, "dataset": dataset, "schema": schema,
          "query_status": query_result.get("status"),
          "candidate_count": query_result.get("total", len(matches)),
