@@ -42,7 +42,8 @@ def encrypted_connect(path: str | Path):
         raise RuntimeError("SQLCipher key is not available in the OS credential store.")
     driver = _sqlcipher()
     connection = driver.connect(str(path), timeout=30)
-    connection.execute("PRAGMA key = ?", (key,))
+    connection.execute(f"PRAGMA key = {_quote_sql(key)}")
+    connection.row_factory = driver.Row
     try:
         connection.execute("SELECT count(*) FROM sqlite_master").fetchone()
         connection.execute("PRAGMA cipher_memory_security = ON")
