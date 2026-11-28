@@ -10,6 +10,8 @@ from ..source_catalog import AdapterManager, SOURCE_CATALOG
 from .passive import collect_domain, collect_ip, collect_website
 from . import passive_sources as src
 
+_ADAPTER_MANAGER = AdapterManager(retries=1, base_delay=0.2, failure_threshold=3, cooldown_seconds=90.0)
+
 
 def _target_kind(raw: str):
     email = bool(re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", raw))
@@ -35,7 +37,7 @@ def _target_kind(raw: str):
 
 def build_registry(*, misp_url: str = "", adapter_manager: AdapterManager | None = None) -> CollectorRegistry:
     """Build callable adapters from catalogue entries marked implemented."""
-    manager = adapter_manager or AdapterManager(retries=1, base_delay=0.2, failure_threshold=3)
+    manager = adapter_manager or _ADAPTER_MANAGER
     catalogue = {item.source_id: item for item in SOURCE_CATALOG}
     registry = CollectorRegistry()
 
