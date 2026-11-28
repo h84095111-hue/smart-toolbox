@@ -122,3 +122,29 @@ def run_all(target, misp_url=""):
         "findings": result["findings"], "failures": failures,
         "skipped": skipped, "events": result["events"], "status": result["status"],
     }
+
+def run_selected(target, source_id, misp_url=""):
+    """Execute one catalogue-backed source through the shared workflow."""
+    raw = (target or "").strip()
+    if not raw:
+        raise ValueError("Enter a lookup target.")
+    target_type, normalized, _ = _target_kind(raw)
+    if target_type == "url":
+        parsed = urlparse(raw if "://" in raw else "https://" + raw)
+        if not parsed.hostname:
+            raise ValueError("Could not identify a URL hostname.")
+        normalized = parsed.hostname.lower().rstrip(".")
+    result = run_workflow(
+        normalized,
+        build_registry(misp_url=misp_url),
+        context={"original_target": raw, "target_type": target_type},
+        target_type=target_type,
+        selected=(source_id,),
+        policy=ExecutionPolicy(max_workers=1, timeout_seconds=45.0, allow_active=False),
+    )
+    return {
+        "run_id": result["run_id"], "target": raw, "findings": result["findings"],
+        "failures": result["failures"], "skipped": result["skipped"],
+        "events": result["events"], "status": result["status"],
+    }
+
