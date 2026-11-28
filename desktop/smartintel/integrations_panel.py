@@ -3,7 +3,7 @@ import json
 from PyQt6.QtCore import QThread,pyqtSignal
 from PyQt6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QLabel,QComboBox,QLineEdit,QPushButton,QPlainTextEdit,QMessageBox,QDialog,QTableWidget,QTableWidgetItem,QHeaderView
 from .collectors.all_in_one import run_all, run_selected
-from .workflow import run_identity_workflow
+from .workflow import run_identity_workflow, CancellationToken
 from .source_catalog import list_sources
 
 class _Task(QThread):
@@ -17,13 +17,14 @@ class IntegrationsPanel(QWidget):
     finding_ready=pyqtSignal(object)
     workflow_ready=pyqtSignal(object)
     def __init__(self,parent=None):
-        super().__init__(parent); self.latest=None; self.task=None
+        super().__init__(parent); self.latest=None; self.task=None; self.cancellation=None
         v=QVBoxLayout(self); v.setSpacing(12)
         title=QLabel("Passive OSINT collection"); title.setStyleSheet("font-size:21px;font-weight:800"); v.addWidget(title)
         note=QLabel("Run one source or orchestrate all relevant passive sources for a domain, public IP or URL. Missing provider keys are skipped; source errors do not stop the rest of the scan.")
         note.setWordWrap(True); note.setObjectName("muted"); v.addWidget(note)
         row=QHBoxLayout(); self.target=QLineEdit(); self.target.setPlaceholderText("domain · public IP · URL · username · email"); row.addWidget(self.target,3)
-        self.all_button=QPushButton("⚡  All-in-One Passive Scan"); self.all_button.setObjectName("primary"); self.all_button.clicked.connect(self.run_all_sources); row.addWidget(self.all_button,2); v.addLayout(row)
+        self.all_button=QPushButton("⚡  All-in-One Passive Scan"); self.all_button.setObjectName("primary"); self.all_button.clicked.connect(self.run_all_sources); row.addWidget(self.all_button,2)
+        self.cancel_button=QPushButton("Stop run"); self.cancel_button.setEnabled(False); self.cancel_button.clicked.connect(self.cancel_run); row.addWidget(self.cancel_button); v.addLayout(row)
         identity_row=QHBoxLayout()
         self.identity_type=QComboBox(); self.identity_type.addItems(["Username","Email","Phone","Profile URL"]); identity_row.addWidget(self.identity_type,1)
         self.site_limit=QComboBox(); self.site_limit.addItem("500 sites",500); self.site_limit.addItem("1,000 sites",1000); self.site_limit.addItem("2,000 sites",2000); self.site_limit.addItem("3,000 sites",3000); identity_row.addWidget(self.site_limit,1)
@@ -38,13 +39,17 @@ class IntegrationsPanel(QWidget):
         self._busy=False
     def set_busy(self,busy):
         self._busy=busy
-        self.all_button.setEnabled(not busy); self.run_button.setEnabled(not busy); self.identity_button.setEnabled(not busy)
+        self.all_button.setEnabled(not busy); self.run_button.setEnabled(not busy); self.identity_button.setEnabled(not busy); self.cancel_button.setEnabled(busy)
         if busy:self.add_button.setEnabled(False)
+    def cancel_run(self):
+        if self.cancellation:self.cancellation.cancel()
+        self.output.appendPlainText("\\nCancellation requested. Running isolated collectors are being terminated…")
     def run_all_sources(self):
         value=self.target.text().strip()
         if not value: QMessageBox.information(self,"Target required","Enter a domain, public IP or URL."); return
         self.set_busy(True); self.output.setPlainText("ALL-IN-ONE PASSIVE SCAN\nTarget: "+value+"\n\nStarting relevant sources…")
-        self.task=_Task(run_all,value,self.misp.text().strip())
+        self.cancellation=CancellationToken()
+        self.task=_Task(run_all,value,self.misp.text().strip(),self.cancellation)
         self.task.done.connect(self.all_complete); self.task.failed.connect(self.fail); self.task.finished.connect(lambda:self.set_busy(False)); self.task.start()
     def all_complete(self,result):
         findings=result["findings"]; failures=result["failures"]; skipped=result["skipped"]
@@ -65,7 +70,8 @@ class IntegrationsPanel(QWidget):
         options={"max_sites":int(self.site_limit.currentData())} if kind=="username" else ({"default_region":"MY"} if kind=="phone" else {})
         self.set_busy(True)
         self.output.setPlainText(f"NO-API {kind.upper()} CHECK\\nTarget: {value}\\n\\nRunning local/public-source checks…")
-        self.task=_Task(lambda: run_identity_workflow(kind,value,**options))
+        self.cancellation=CancellationToken()
+        self.task=_Task(lambda: run_identity_workflow(kind,value,cancellation=self.cancellation,**options))
         self.task.done.connect(self.identity_complete)
         self.task.failed.connect(self.fail)
         self.task.finished.connect(lambda:self.set_busy(False))
@@ -158,7 +164,8 @@ class IntegrationsPanel(QWidget):
         }
         source_id=source_ids[self.source.currentText()]
         self.set_busy(True); self.output.setPlainText("Selected source workflow running…")
-        self.task=_Task(run_selected,value,source_id,self.misp.text().strip())
+        self.cancellation=CancellationToken()
+        self.task=_Task(run_selected,value,source_id,self.misp.text().strip(),self.cancellation)
         self.task.done.connect(self.selected_complete); self.task.failed.connect(self.fail)
         self.task.finished.connect(lambda:self.set_busy(False)); self.task.start()
     def selected_complete(self,result):
