@@ -8,9 +8,23 @@ from __future__ import annotations
 
 import hashlib
 import re
-from urllib.parse import quote, urlparse, urlunparse, urlencode
+from urllib.parse import quote, urlparse, urlencode, parse_qsl
 from defusedxml import ElementTree as ET
 from defusedxml.common import DefusedXmlException
+
+
+
+_SENSITIVE_QUERY_KEYS = {
+    "access_token", "auth", "authorization", "api_key", "apikey", "key",
+    "password", "passwd", "secret", "session", "signature", "token",
+}
+
+
+def _reject_secret_query(parsed) -> None:
+    for key, _value in parse_qsl(parsed.query, keep_blank_values=True):
+        lowered = key.casefold()
+        if lowered in _SENSITIVE_QUERY_KEYS or lowered.endswith("_token") or lowered.endswith("_secret"):
+            raise ValueError("Public monitor URLs must not embed authentication tokens, API keys or session secrets.")
 
 
 def _fetch_json(url: str) -> dict | list:
@@ -136,6 +150,7 @@ def monitor_rss_feed(feed_url: str, *, keywords: list[str] | None = None,
     if (parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password
             or parsed.port not in {None, 443}):
         raise ValueError("RSS/Atom monitoring requires a public HTTPS feed URL.")
+    _reject_secret_query(parsed)
     from .collectors.passive import _get_public_pinned
     response = _get_public_pinned(parsed.geturl())
     if len(response.content) > 1_500_000:
