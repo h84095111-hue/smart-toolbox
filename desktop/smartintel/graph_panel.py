@@ -82,7 +82,7 @@ class IdentityGraphPanel(QWidget):
         related=[e for e in self.evidence if e.id in node.evidence_ids]
         sources={e.source for e in related}
         risk=assess_false_positive_risk()
-        self.risk.setText(f"False-positive risk index: {risk.score}/100 ({risk.risk_band.upper()})\nUncalibrated heuristic — not a probability.")
+        self.risk.setText(f"Baseline false-positive caution: {risk.score}/100 ({risk.risk_band.upper()})\nUncalibrated heuristic — not a probability or per-person match estimate.")
         lines=[f"{node.kind.upper()}: {node.label}",f"Supporting evidence records: {len(related)}",f"Distinct source labels: {len(sources)} (independence not assumed)",""]
         for e in related:
             lines.extend([f"• {e.title}",f"  Source: {e.source}",f"  Evidence ID: {e.id}",f"  URL: {e.url or 'Not supplied'}",""])
