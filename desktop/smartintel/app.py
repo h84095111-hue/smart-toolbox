@@ -18,6 +18,7 @@ from .config import APP_DIR
 from .browser_capture import capture_public_screenshot
 from .image_intel import inspect_image, compare_images
 from .signing import signed_export, verify_signed_export
+from .monitoring_panel import MonitoringPanel
 
 STYLE="""QWidget{background:#0a1020;color:#e7ecf7;font-family:Segoe UI,Inter,Arial;font-size:13px;selection-background-color:#6558df;selection-color:#fff}
 QMainWindow,QDialog{background:#0a1020}
@@ -84,8 +85,8 @@ class SettingsDialog(QDialog):
         except Exception as e:QMessageBox.critical(self,"Key storage error",str(e))
 
 class MainWindow(QMainWindow):
-    def __init__(self):
-        super().__init__(); self.store=Store(); self.case_id=None; self.worker=None
+    def __init__(self, user=None):
+        super().__init__(); self.store=Store(); self.current_user=user; self.case_id=None; self.worker=None
         self.setWindowTitle("Smart Intel — AI OSINT Workstation"); self.resize(1280,820); self.setMinimumSize(950,650)
         root=QWidget(); row=QHBoxLayout(root); row.setContentsMargins(0,0,0,0); row.setSpacing(0)
         side=QFrame(); side.setObjectName("sidebar"); side.setFixedWidth(245); sv=QVBoxLayout(side); sv.setContentsMargins(16,20,16,16)
@@ -93,23 +94,31 @@ class MainWindow(QMainWindow):
         sub=QLabel("AI OSINT WORKSTATION"); sub.setObjectName("eyebrow"); sv.addWidget(sub); sv.addSpacing(20)
         self.case_label=QLabel("NO ACTIVE CASE"); self.case_label.setObjectName("muted"); sv.addWidget(self.case_label)
         self.case_list=QListWidget(); self.case_list.currentRowChanged.connect(self.case_selected); sv.addWidget(self.case_list,1)
-        new=QPushButton("+  New investigation"); new.setObjectName("primary"); new.clicked.connect(self.new_case); sv.addWidget(new)
+        new=QPushButton("+  New investigation"); new.setObjectName("primary"); new.clicked.connect(self.new_case); sv.addWidget(new); self.new_case_button=new
         self.nav=[]
         for text,idx in [("⌕  Collect intelligence",0),("◉  OSINT source hub",1),("▤  Evidence & timeline",2),("⌘  AI analyst",3),("▤  Reports",4),("◎  Identity graph",5)]:
             b=QPushButton(text); b.clicked.connect(lambda _,i=idx:self.tabs.setCurrentIndex(i)); sv.addWidget(b)
-        settings=QPushButton("⚙  AI provider settings"); settings.clicked.connect(lambda:SettingsDialog(self).exec()); sv.addWidget(settings)
+        team=QPushButton("♙  Manage users"); team.clicked.connect(self.manage_team); sv.addWidget(team)
+        share=QPushButton("↗  Share active case"); share.clicked.connect(self.share_case); sv.addWidget(share)
+        settings=QPushButton("⚙  AI & network settings"); settings.clicked.connect(lambda:SettingsDialog(self).exec()); sv.addWidget(settings)
         privacy=QLabel("● PASSIVE PUBLIC-SOURCE MODE\nNo login attempts · No exploitation\nEvidence stored locally"); privacy.setStyleSheet("color:#8fe0bd;background:#142b30;border:1px solid #28534f;border-radius:8px;padding:12px;font-size:11px"); sv.addWidget(privacy)
         row.addWidget(side)
         main=QWidget(); mv=QVBoxLayout(main); mv.setContentsMargins(25,20,25,18)
         top=QHBoxLayout(); eyebrow=QLabel("INTELLIGENCE WORKSPACE"); eyebrow.setObjectName("eyebrow"); top.addWidget(eyebrow); top.addStretch()
         self.status=QLabel("Ready"); self.status.setObjectName("muted"); top.addWidget(self.status); mv.addLayout(top)
         hero=QLabel("Investigate the public web.\nConnect evidence. Find the signal."); hero.setObjectName("heading"); hero.setStyleSheet("background:#182449;border:1px solid #38457a;border-radius:12px;padding:18px"); mv.addWidget(hero)
-        self.tabs=QTabWidget(); self.tabs.addTab(self.collect_tab(),"Collect"); self.integrations=IntegrationsPanel(); self.integrations.finding_ready.connect(self.integration_done); self.integrations.workflow_ready.connect(self.workflow_done); self.tabs.addTab(self.integrations,"OSINT Sources"); self.tabs.addTab(self.evidence_tab(),"Evidence & Timeline"); self.tabs.addTab(self.ai_tab(),"AI Analyst"); self.tabs.addTab(self.report_tab(),"Reports"); self.graph_panel=IdentityGraphPanel(self.store); self.tabs.addTab(self.graph_panel,"Identity Graph"); mv.addWidget(self.tabs,1)
+        self.tabs=QTabWidget(); self.tabs.addTab(self.collect_tab(),"Collect"); self.integrations=IntegrationsPanel(); self.integrations.finding_ready.connect(self.integration_done); self.integrations.workflow_ready.connect(self.workflow_done); self.tabs.addTab(self.integrations,"OSINT Sources"); self.tabs.addTab(self.evidence_tab(),"Evidence & Timeline"); self.tabs.addTab(self.ai_tab(),"AI Analyst"); self.tabs.addTab(self.report_tab(),"Reports"); self.graph_panel=IdentityGraphPanel(self.store); self.tabs.addTab(self.graph_panel,"Identity Graph"); self.monitoring_panel=MonitoringPanel(self.store,self.current_user); self.monitoring_panel.evidence_added.connect(self.monitoring_evidence_added); self.tabs.addTab(self.monitoring_panel,"Monitoring"); mv.addWidget(self.tabs,1)
         row.addWidget(main,1); self.setCentralWidget(root); self.refresh_cases()
         if self.case_list.count():self.case_list.setCurrentRow(0)
-        else:self.new_case()
-    def require_case(self):
+        elif self.current_user and self.current_user.get("role") in {"admin","analyst"}:self.new_case()
+        else:QMessageBox.information(self,"No shared cases","This account has no cases assigned. Ask an administrator to share a case.")
+    def require_case(self, write=False):
         if not self.case_id:QMessageBox.information(self,"Create a case","Create an investigation first."); return False
+        if write:
+            role=self.store.user_case_role(self.case_id,self.current_user)
+            if role not in {"owner","analyst"}:
+                QMessageBox.warning(self,"Read-only access","Your case role does not allow changes.")
+                return False
         return True
     def collect_tab(self):
         w=QWidget(); v=QVBoxLayout(w); intro=QLabel("Passive public-source collection. Select a target type and run a lookup."); intro.setObjectName("muted"); v.addWidget(intro)
@@ -127,7 +136,7 @@ class MainWindow(QMainWindow):
         append_audit(APP_DIR/"audit.jsonl",{"action":"workflow_completed","case_id":self.case_id,"run_id":result.get("run_id"),"status":result.get("status"),"event_count":len(result.get("events",[]))})
         self.status.setText("Workflow events saved to case audit")
     def integration_done(self, finding):
-        if not self.require_case(): return
+        if not self.require_case(write=True): return
         item=Evidence(self.case_id,finding.get("source","Unknown"),finding.get("title","OSINT finding"),finding.get("url",""),finding.get("content",""),confidence=finding.get("confidence","Medium"),kind=finding.get("kind","Passive OSINT"))
         self.store.add_evidence(item)
         append_audit(APP_DIR/"audit.jsonl",{"action":"evidence_added","case_id":self.case_id,"evidence_id":item.id,"source":item.source,"title":item.title})
@@ -185,25 +194,36 @@ class MainWindow(QMainWindow):
         verify=QPushButton("Verify signed bundle"); verify.clicked.connect(self.verify_signed_bundle); r.addWidget(verify)
         v.addLayout(r); return w
     def refresh_cases(self):
-        self.case_list.blockSignals(True); self.case_list.clear(); self.cases=self.store.cases()
+        self.case_list.blockSignals(True); self.case_list.clear(); self.cases=self.store.cases_for_user(self.current_user)
         for c in self.cases:self.case_list.addItem(c["name"])
         self.case_list.blockSignals(False)
     def new_case(self):
         name,ok=QInputDialog.getText(self,"New investigation","Case name:")
         if ok and name.strip():
-            cid=self.store.create_case(name.strip()); append_audit(APP_DIR/"audit.jsonl",{"action":"case_created","case_id":cid,"name":name.strip()}); self.refresh_cases()
+            if not self.current_user or self.current_user.get("role")=="viewer":
+                QMessageBox.warning(self,"Permission denied","Only analysts and administrators can create cases."); return
+            cid=self.store.create_case(name.strip(),owner_id=self.current_user["id"]); append_audit(APP_DIR/"audit.jsonl",{"action":"case_created","case_id":cid,"name":name.strip(),"created_by":self.current_user["id"]}); self.refresh_cases()
             self.case_list.setCurrentRow(next(i for i,c in enumerate(self.cases) if c["id"]==cid))
     def case_selected(self,i):
         if i<0 or i>=len(getattr(self,"cases",[])):return
-        self.case_id=self.cases[i]["id"]; self.case_label.setText("ACTIVE CASE"); self.refresh_evidence(); self.refresh_attachments(); self.graph_panel.set_case(self.case_id)
+        self.case_id=self.cases[i]["id"]
+        role=self.store.user_case_role(self.case_id,self.current_user) or "viewer"
+        self.case_label.setText("ACTIVE CASE · "+role.upper())
+        writable=role in {"owner","analyst"}
+        self.collect_btn.setEnabled(writable); self.all_scan_btn.setEnabled(writable)
+        self.integrations.all_button.setEnabled(writable); self.integrations.run_button.setEnabled(writable); self.integrations.identity_button.setEnabled(writable)
+        self.graph_panel.add_lead_button.setEnabled(writable); self.graph_panel.merge_button.setEnabled(writable)
+        self.new_case_button.setEnabled(bool(self.current_user and self.current_user.get("role") in {"admin","analyst"}))
+        self.refresh_evidence(); self.refresh_attachments(); self.graph_panel.set_case(self.case_id); self.monitoring_panel.set_case(self.case_id)
     def collect(self):
-        if not self.require_case():return
+        if not self.require_case(write=True):return
         value=self.target.text().strip()
         if not value:return
         fn={"Domain":collect_domain,"Public IP address":collect_ip,"Website URL":collect_website}[self.target_type.currentText()]
         self.collect_btn.setEnabled(False); self.status.setText("Collecting…")
         self.worker=Worker(fn,value); self.worker.done.connect(self.collection_done); self.worker.failed.connect(self.failed); self.worker.finished.connect(lambda:self.collect_btn.setEnabled(True)); self.worker.start()
     def collection_done(self,findings):
+        if not self.require_case(write=True):return
         for f in findings:
             item=Evidence(self.case_id,f.source,f.title,f.url,f.value,confidence=f.confidence,kind="OSINT finding"); self.store.add_evidence(item); append_audit(APP_DIR/"audit.jsonl",{"action":"evidence_added","case_id":self.case_id,"evidence_id":item.id,"source":item.source,"title":item.title})
             self.collect_log.appendPlainText(f"\n[{f.confidence}] {f.title}\nSource: {f.source}\nURL: {f.url}\n{f.value[:4500]}")
@@ -232,7 +252,7 @@ class MainWindow(QMainWindow):
         self.timeline_from.clear(); self.timeline_to.clear(); self.timeline_query.clear(); self.refresh_evidence()
 
     def enable_database_encryption(self):
-        if not self.require_case(): return
+        if not self.require_case(write=True): return
         answer=QMessageBox.question(self,"Encrypt complete case database",
             "Convert the entire SQLite database to SQLCipher AES-256 page encryption? A plaintext backup will be retained beside the database. Keep your OS keyring available; loss of the key makes the encrypted database unreadable.")
         if answer != QMessageBox.StandardButton.Yes:return
@@ -246,7 +266,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self,"Database encryption unavailable",str(exc))
 
     def capture_screenshot(self):
-        if not self.require_case():return
+        if not self.require_case(write=True):return
         status=self.store.vault_status()
         if not status.get("enabled") or status.get("locked"):
             QMessageBox.information(self,"Encrypted vault required","Enable and unlock the evidence vault before capturing a screenshot.")
@@ -281,7 +301,7 @@ class MainWindow(QMainWindow):
         self.failed(message)
 
     def inspect_image_file(self):
-        if not self.require_case():return
+        if not self.require_case(write=True):return
         path,_=QFileDialog.getOpenFileName(self,"Inspect local image","",
             "Images (*.jpg *.jpeg *.png *.webp *.tif *.tiff *.bmp)")
         if not path:return
@@ -400,7 +420,7 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self,"Vault enabled","Evidence content is now encrypted at rest. Case names and other SQLite metadata remain plaintext.")
         except Exception as exc: QMessageBox.critical(self,"Vault error",str(exc))
     def import_attachment(self,kind):
-        if not self.require_case(): return
+        if not self.require_case(write=True): return
         path,_=QFileDialog.getOpenFileName(self,"Import evidence attachment")
         if not path: return
         try:
@@ -411,7 +431,7 @@ class MainWindow(QMainWindow):
             self.refresh_attachments(); self.status.setText("Encrypted attachment imported")
         except Exception as exc: QMessageBox.critical(self,"Import failed",str(exc))
     def archive_as_warc(self):
-        if not self.require_case(): return
+        if not self.require_case(write=True): return
         source,_=QFileDialog.getOpenFileName(self,"Select file to wrap in WARC")
         if not source: return
         try:
@@ -426,7 +446,7 @@ class MainWindow(QMainWindow):
             self.refresh_attachments(); self.status.setText("Encrypted WARC resource record created")
         except Exception as exc: QMessageBox.critical(self,"WARC creation failed",str(exc))
     def capture_url_warc(self):
-        if not self.require_case(): return
+        if not self.require_case(write=True): return
         url,ok=QInputDialog.getText(self,"Capture public URL","HTTP or HTTPS URL (one response; redirects are not followed):")
         if not ok or not url.strip(): return
         try:
