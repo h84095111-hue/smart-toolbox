@@ -40,6 +40,26 @@ def force_layout(nodes, edges, iterations=120, width=900.0, height=650.0):
     count=len(nodes)
     if not count: return {}
     if count==1: return {nodes[0].id:(0.0,0.0)}
+    # Exact all-pairs repulsion is useful for small graphs but quadratic for large cases.
+    # For larger graphs use a deterministic component-aware layout with O(V+E) work.
+    if count > 180:
+        components=connected_components(nodes,edges)
+        groups={}
+        for node in nodes: groups.setdefault(components[node.id],[]).append(node)
+        ordered=[groups[key] for key in sorted(groups)]
+        cols=max(1,math.ceil(math.sqrt(len(ordered))))
+        rows=math.ceil(len(ordered)/cols)
+        cell_w=width/cols; cell_h=height/rows
+        result={}
+        for index,group in enumerate(ordered):
+            col=index%cols; row=index//cols
+            cx=-width/2+(col+0.5)*cell_w; cy=-height/2+(row+0.5)*cell_h
+            radius=min(cell_w,cell_h)*0.32
+            for j,node in enumerate(sorted(group,key=lambda item:item.id)):
+                angle=2*math.pi*j/max(1,len(group))-math.pi/2
+                local=radius*min(1.0,math.sqrt(len(group)/12))
+                result[node.id]=(cx+local*math.cos(angle),cy+local*math.sin(angle))
+        return result
     area=width*height; k=math.sqrt(area/count)
     positions={}
     for node in nodes:
