@@ -43,6 +43,17 @@ def _node_id(kind: str,value: str)->str:
 def _structured_candidates(title: str,url: str,content: str):
     """Read semantic HTML attributes and link schemes before text-pattern fallback."""
     found=[]
+    # Built-in collectors serialize selected semantic identifiers into evidence JSON.
+    try:
+        payload=json.loads(content)
+        entries=payload.get("semantic_identifiers",[]) if isinstance(payload,dict) else []
+        for entry in entries:
+            kind=str(entry.get("kind","")); value=str(entry.get("value","")).strip()
+            if kind in {"email","phone","username","profile_or_url"} and value:
+                if kind=="phone" and len(re.sub(r"\D","",value))<8: continue
+                found.append((kind,value,str(entry.get("reason","Structured metadata captured by collector"))))
+    except (ValueError,TypeError,AttributeError):
+        pass
     try:
         from bs4 import BeautifulSoup
         soup=BeautifulSoup(content,"html.parser")
@@ -54,7 +65,7 @@ def _structured_candidates(title: str,url: str,content: str):
                 if any(word in key for word in ("email","e-mail")):
                     found.append(("email",value,"Email value from semantic HTML metadata"))
                 if any(token in re.split(r"[^a-z0-9]+",key) for token in ("telephone","phone","tel")):
-                    digits=re.sub(r"\\D","",value)
+                    digits=re.sub(r"\D","",value)
                     if len(digits)>=8:
                         found.append(("phone",value,"Phone value from semantic HTML metadata"))
                 if any(word in key for word in ("author","username","screen_name","twitter:creator")):
