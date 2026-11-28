@@ -75,7 +75,7 @@ class SettingsDialog(QDialog):
             label=({"virustotal":"VirusTotal","abuseipdb":"AbuseIPDB","otx":"AlienVault OTX","shodan":"Shodan","censys":"Censys","securitytrails":"SecurityTrails","misp":"MISP","hibp":"Have I Been Pwned","opencorporates":"OpenCorporates","courtlistener":"CourtListener","opensanctions":"OpenSanctions","network_proxy":"HTTP / Tor SOCKS5H proxy URL","telegram_bot_token":"Telegram Bot API token"}).get(p,p)
             v.addWidget(QLabel(label if p in {"network_proxy","telegram_bot_token"} else label+" API key")); row=QHBoxLayout(); e=QLineEdit(); e.setEchoMode(QLineEdit.EchoMode.Password); e.setText(get_api_key(p) or ""); row.addWidget(e)
             clear=QPushButton("Clear"); clear.clicked.connect(lambda _,provider=p,field=e:self.clear(provider,field)); row.addWidget(clear); v.addLayout(row); self.fields[p]=e
-        note=QLabel("Keys are stored in your OS credential store. Proxy routing is opt-in; for Tor use a running local SOCKS5 listener (commonly 127.0.0.1:9050). Smart Intel does not start Tor or manage VPN software. Proxy routing is not anonymity. Telegram: create a bot with BotFather, add it to the public channels you administer, then paste its token here. The Bot API delivers new channel updates only; it does not provide message history."); note.setObjectName("muted"); v.addWidget(note)
+        note=QLabel("Keys are stored in your OS credential store. Proxy routing is opt-in; for onion sites use a running local Tor SOCKS5H listener configured as socks5h://127.0.0.1:9050. Smart Intel does not start Tor or manage VPN software. Proxy routing is not anonymity. Telegram: create a bot with BotFather, add it to the public channels you administer, then paste its token here. The Bot API delivers new channel updates only; it does not provide message history."); note.setObjectName("muted"); v.addWidget(note)
         save=QPushButton("Save keys"); save.setObjectName("primary"); save.clicked.connect(self.save); v.addWidget(save)
     def clear(self,p,e):
         try:delete_api_key(p)
@@ -317,7 +317,7 @@ class MainWindow(QMainWindow):
         self.integrations.all_button.setEnabled(writable); self.integrations.run_button.setEnabled(writable); self.integrations.identity_button.setEnabled(writable)
         self.graph_panel.add_lead_button.setEnabled(writable); self.graph_panel.merge_button.setEnabled(writable); self.graph_panel.undo_button.setEnabled(writable)
         self.new_case_button.setEnabled(bool(self.current_user and self.current_user.get("role") in {"admin","analyst"}))
-        self.refresh_evidence(); self.refresh_attachments(); self.graph_panel.set_case(self.case_id); self.monitoring_panel.set_case(self.case_id); self.content_monitor_panel.set_case(self.case_id)
+        self.refresh_evidence(); self.refresh_attachments(); self.graph_panel.set_case(self.case_id); self.monitoring_panel.set_case(self.case_id); self.content_monitor_panel.set_case(self.case_id); self.content_monitor_panel.set_case(self.case_id)
     def collect(self):
         if not self.require_case(write=True):return
         value=self.target.text().strip()
