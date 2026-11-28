@@ -1,67 +1,130 @@
-"""Orchestrate one target through relevant passive public-source connectors."""
-import ipaddress,re
+"""Orchestrate passive collectors through the shared workflow and source registry."""
+from __future__ import annotations
+
+import ipaddress
+import re
 from urllib.parse import urlparse
+
+from ..workflow import CollectorRegistry, CollectorSpec, ExecutionPolicy, run_workflow
+from ..source_catalog import AdapterManager, SOURCE_CATALOG
 from .passive import collect_domain, collect_ip, collect_website
 from . import passive_sources as src
 
-def run_all(target, misp_url=""):
-    raw=(target or "").strip()
-    if not raw: raise ValueError("Enter a domain, public IP address or website URL.")
-    raw_is_email=bool(re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+",raw))
-    parsed=urlparse(raw if "://" in raw else "https://"+raw)
-    is_url=("://" in raw) or ("/" in raw)
-    host=raw if raw_is_email else (parsed.hostname if is_url else raw)
-    if not host: raise ValueError("Could not identify a target host.")
+
+def _target_kind(raw: str):
+    email = bool(re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", raw))
+    parsed = urlparse(raw if "://" in raw else "https://" + raw)
+    is_url = ("://" in raw) or ("/" in raw)
+    host = raw if email else (parsed.hostname if is_url else raw)
+    if not host:
+        raise ValueError("Could not identify a target host.")
     try:
-        ip=ipaddress.ip_address(host)
-        is_ip=True
-    except ValueError:
-        ip=None; is_ip=False
-    findings=[]; failures=[]; skipped=[]
-    def run(label, fn, *args):
-        try:
-            item=fn(*args)
-            if item is None: skipped.append(label+": no result"); return
-            values=item if isinstance(item,list) else [item]
-            for value in values:
-                if isinstance(value,dict):
-                    findings.append(value)
-                else:
-                    findings.append({"title":getattr(value,"title","Finding"),"content":getattr(value,"value",str(value)),"source":getattr(value,"source",label),"url":getattr(value,"url",""),"confidence":getattr(value,"confidence","Medium"),"kind":"Passive OSINT"})
-        except Exception as exc:
-            message=str(exc).strip() or exc.__class__.__name__
-            if "API key" in message or "not configured" in message or "credential" in message.lower():
-                skipped.append(label+": provider key/configuration missing")
-            else:
-                failures.append(label+": "+message[:350])
-    is_email=bool(re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+",host))
-    is_username=not is_ip and not is_email and not is_url and "." not in host and bool(re.fullmatch(r"@?[A-Za-z0-9_.-]{2,64}",host))
-    if is_ip:
-        if not ip.is_global: raise ValueError("Only globally routable public IP addresses are supported.")
-        run("IP RDAP and reverse DNS",collect_ip,str(ip))
-        run("AbuseIPDB",src.abuseipdb_ip,str(ip))
-        run("Shodan existing host metadata",src.shodan_host,str(ip))
-        run("Censys existing host metadata",src.censys_host,str(ip))
-        if misp_url.strip(): run("MISP exact IOC",src.misp_search,misp_url.strip(),str(ip))
-    elif is_email:
-        run("Authorized breach notification guidance",src.breach_check_guidance,host)
-        skipped.append("Email enrichment: no personal email dossier or leaked-credential search is performed")
-        if misp_url.strip(): run("MISP exact IOC",src.misp_search,misp_url.strip(),host)
-    elif is_username:
-        run("Public username reference links",src.public_username_reference,host)
-        skipped.append("Username matches are references only; account ownership is not verified")
-        if misp_url.strip(): run("MISP exact IOC",src.misp_search,misp_url.strip(),host)
-    else:
-        domain=host.lower().rstrip(".")
-        if is_url:
-            run("Public website metadata",collect_website,raw)
-        run("DNS/RDAP/TLS metadata",collect_domain,domain)
-        run("Certificate transparency",src.certificate_transparency,domain)
-        run("Wayback archive",src.wayback,raw if is_url else domain)
-        run("VirusTotal domain",src.virustotal_domain,domain)
-        run("urlscan existing results",src.urlscan_search,domain)
-        run("AlienVault OTX",src.otx_domain,domain)
-        run("SecurityTrails passive DNS",src.passive_dns_history,domain)
-        run("GDELT public news",src.gdelt_news,domain)
-        if misp_url.strip(): run("MISP exact IOC",src.misp_search,misp_url.strip(),domain)
-    return {"findings":findings,"failures":failures,"skipped":skipped,"target":raw}
+        address = ipaddress.ip_address(host)
+        if not address.is_global:
+            raise ValueError("Only globally routable public IP addresses are supported.")
+        return "ip", str(address), is_url
+    except ValueError as exc:
+        if "Only globally" in str(exc):
+            raise
+    if email:
+        return "email", host, False
+    if not is_url and "." not in host and re.fullmatch(r"@?[A-Za-z0-9_.-]{2,64}", host):
+        return "username", host, False
+    return ("url" if is_url else "domain"), host.lower().rstrip("."), is_url
+
+
+def build_registry(*, misp_url: str = "", adapter_manager: AdapterManager | None = None) -> CollectorRegistry:
+    """Build callable adapters from catalogue entries marked implemented."""
+    manager = adapter_manager or AdapterManager(retries=1, base_delay=0.2, failure_threshold=3)
+    catalogue = {item.source_id: item for item in SOURCE_CATALOG}
+    registry = CollectorRegistry()
+
+    def add(source_id, fn, *, target_types, args=lambda target, context: (target,)):
+        descriptor = catalogue.get(source_id)
+        if descriptor is None or descriptor.status != "implemented":
+            return
+
+        def invoke(target, context):
+            return manager.call(source_id, fn, *args(target, context))
+
+        registry.register(CollectorSpec(
+            name=source_id, run=invoke, description=descriptor.name,
+            mode="passive", target_types=tuple(target_types), enabled=True,
+        ))
+
+    add("crtsh", src.certificate_transparency, target_types=("domain", "url"))
+    add("wayback", src.wayback, target_types=("domain", "url"),
+        args=lambda target, context: (context.get("original_target", target),))
+    add("virustotal", src.virustotal_domain, target_types=("domain", "url"))
+    add("urlscan", src.urlscan_search, target_types=("domain", "url"))
+    add("otx", src.otx_domain, target_types=("domain", "url"))
+    add("securitytrails", src.passive_dns_history, target_types=("domain", "url"))
+    add("gdelt", src.gdelt_news, target_types=("domain", "url"))
+    add("abuseipdb", src.abuseipdb_ip, target_types=("ip",))
+    add("shodan", src.shodan_host, target_types=("ip",))
+    add("censys", src.censys_host, target_types=("ip",))
+    add("maigret", src.public_username_reference, target_types=("username",))
+
+    registry.register(CollectorSpec(
+        name="domain_rdap_dns_tls",
+        run=lambda target, context: collect_domain(target),
+        description="DNS, RDAP and TLS registration metadata",
+        target_types=("domain", "url"),
+    ))
+    registry.register(CollectorSpec(
+        name="ip_rdap_reverse_dns",
+        run=lambda target, context: collect_ip(target),
+        description="RDAP registration and reverse DNS",
+        target_types=("ip",),
+    ))
+    registry.register(CollectorSpec(
+        name="public_website_metadata",
+        run=lambda target, context: collect_website(context["original_target"]),
+        description="Passive public website metadata",
+        target_types=("url",),
+    ))
+    registry.register(CollectorSpec(
+        name="email_authorized_check_guidance",
+        run=lambda target, context: src.breach_check_guidance(target),
+        description="Authorized breach-notification guidance only",
+        target_types=("email",),
+    ))
+    if misp_url.strip():
+        registry.register(CollectorSpec(
+            name="misp_exact_ioc",
+            run=lambda target, context: manager.call("misp", src.misp_search, misp_url.strip(), target),
+            description="Exact IOC lookup in operator-configured MISP",
+            target_types=("ip", "domain", "url", "email", "username"),
+        ))
+    return registry
+
+
+def run_all(target, misp_url=""):
+    raw = (target or "").strip()
+    if not raw:
+        raise ValueError("Enter a domain, public IP address, email, username or website URL.")
+    target_type, normalized, _ = _target_kind(raw)
+    if target_type == "url":
+        parsed = urlparse(raw if "://" in raw else "https://" + raw)
+        if not parsed.hostname:
+            raise ValueError("Could not identify a URL hostname.")
+        normalized = parsed.hostname.lower().rstrip(".")
+
+    result = run_workflow(
+        normalized,
+        build_registry(misp_url=misp_url),
+        context={"original_target": raw},
+        target_type=target_type,
+        policy=ExecutionPolicy(max_workers=6, timeout_seconds=60.0, allow_active=False),
+    )
+    failures = [f"{row['collector']}: {row['error']}" for row in result["failures"]]
+    skipped = [f"{row['collector']}: {row['reason']}" for row in result["skipped"]]
+    if target_type == "email":
+        skipped.append("Email checks are validation and authorized notification guidance only; no account discovery or credential-dump search is performed.")
+    if target_type == "username":
+        skipped.append("Username references are search starting points, not proof that an account exists or belongs to the subject.")
+    return {
+        "run_id": result["run_id"], "target": raw,
+        "findings": result["findings"], "failures": failures,
+        "skipped": skipped, "events": result["events"], "status": result["status"],
+    }
