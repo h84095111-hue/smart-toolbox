@@ -32,7 +32,7 @@ def assess_false_positive_risk(*, exact_email: bool=False, exact_phone: bool=Fal
     if popular_handle: apply("popular_handle",15,"Common or widely reused handles are weak identifiers.")
     if display_name_only: apply("display_name_only",22,"Display-name similarity alone is not identity evidence.")
     if stale_sources: apply("stale_sources",min(15,5*stale_sources),"Older evidence may no longer describe the same account or person.")
-    score=max(0,min(100,score))
+    score=max(5,min(100,score))
     band="low" if score<30 else "moderate" if score<60 else "high"
     return RiskAssessment(score,band,"Higher score means higher false-positive concern",factors)
 
