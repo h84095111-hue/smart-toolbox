@@ -53,7 +53,7 @@ def test_rss_monitor_parses_atom_and_applies_keywords(monkeypatch):
       <entry><id>tag:example,2</id><title>Sports update</title>
       <link href='https://example.org/posts/2'/><summary>Game results</summary></entry>
     </feed>"""
-    monkeypatch.setattr(social_monitor, "_get_public_pinned",
+    monkeypatch.setattr("smartintel.collectors.passive._get_public_pinned",
                         lambda url: SimpleNamespace(content=xml))
     result = social_monitor.monitor_rss_feed("https://example.org/feed.xml", keywords=["safety"])
     assert len(result) == 1
