@@ -25,7 +25,7 @@ def assess_false_positive_risk(*,exact_email=False,exact_phone=False,cross_linke
     if exact_email:apply("exact_email",-28,"The selected email identifier is present in the supporting evidence; mailbox ownership remains unverified.")
     if exact_phone:apply("exact_phone",-18,"The selected phone identifier is present in the supporting evidence; subscriber ownership remains unverified.")
     if cross_linked_profile:apply("cross_linked_profile",-18,"The selected identifier is explicitly linked by a public profile attribute.")
-    # Distinct source labels are not proof of source independence; do not award a bonus for them.
+    # Kept as a compatibility argument; source labels do not establish independence, so no bonus is applied.
     if contradictions:apply("contradictions",min(35,15*contradictions),"Conflicting attributes increase false-match concern.")
     if popular_handle:apply("popular_handle",15,"Common handles are weak identifiers.")
     if display_name_only:apply("display_name_only",22,"Display-name similarity alone is not identity evidence.")
