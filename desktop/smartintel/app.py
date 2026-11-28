@@ -233,7 +233,8 @@ class MainWindow(QMainWindow):
             values=[item["filename"],item["kind"],str(item["size"]),item["sha256"],item["created_at"][:19]]
             for j,value in enumerate(values): self.attach_table.setItem(i,j,QTableWidgetItem(value))
         status=self.store.vault_status()
-        self.vault_status_label.setText(("Encrypted evidence payloads are enabled. " if status["enabled"] else "Encryption is not enabled. ")+status["scope"])
+        state = "Vault is locked: OS credential-store key unavailable. Do not reset the key." if status.get("locked") else ("Encrypted evidence payloads are enabled. " if status["enabled"] else "Encryption is not enabled. ")
+        self.vault_status_label.setText(state + status["scope"])
     def enable_vault(self):
         if QMessageBox.question(self,"Enable evidence encryption","Create/use an encryption key in the operating-system credential store and encrypt all existing evidence content? Keep your OS credential-store access: losing the key means losing access to encrypted evidence.") != QMessageBox.StandardButton.Yes: return
         try:
