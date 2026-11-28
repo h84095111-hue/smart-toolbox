@@ -92,6 +92,7 @@ def _normalize_result(spec: CollectorSpec, value: Any) -> list[dict[str, Any]]:
                 "confidence": getattr(item, "confidence", "Medium"),
             }
         row.setdefault("source", spec.name)
+        row.setdefault("collector", spec.name)
         row.setdefault("kind", "Passive OSINT" if spec.mode == "passive" else "Authorized active collection")
         normalized.append(row)
     return normalized
