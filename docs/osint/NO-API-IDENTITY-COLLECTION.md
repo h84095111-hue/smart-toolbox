@@ -54,8 +54,8 @@ display-name similarity alone.
 
 ## Integration status
 
-This module is a tested collection foundation. It is not yet wired into the
-PyQt6 integrations panel, case graph, or recursive workflow runner. UI wiring
-and evidence-backed, approval-gated pivot orchestration are separate follow-up
-work. No API key is required for Maigret, basic email DNS inspection or
+This module is wired into the PyQt6 integrations panel for username, email,
+phone and public profile URL checks. The case graph and workflow runner do not
+yet execute approved pivots automatically; the queue is a bounded approval
+foundation. No API key is required for Maigret, email DNS inspection or
 phonenumbers parsing.
