@@ -192,6 +192,19 @@ class Store:
                                     "canonical_node_id": row["canonical_node_id"], "removed_by": removed_by})
         return True
 
+    def _assert_case_monitor_write_access(self, db, case_id, user_id):
+        if not db.execute("SELECT 1 FROM cases WHERE id=?", (case_id,)).fetchone():
+            raise KeyError("Unknown case.")
+        user = db.execute("SELECT role,disabled FROM users WHERE id=?", (user_id,)).fetchone()
+        if user is None or user["disabled"]:
+            raise PermissionError("A valid active account is required to create monitors.")
+        if user["role"] == "admin":
+            return
+        membership = db.execute("SELECT role FROM case_members WHERE case_id=? AND user_id=?",
+                                (case_id, user_id)).fetchone()
+        if membership is None or membership["role"] not in {"owner", "analyst"}:
+            raise PermissionError("Only case owners or analysts can create monitors.")
+
     def add_monitor_schedule(self, case_id, target, interval_seconds, created_by):
         import uuid
         if int(interval_seconds) < 3600 or int(interval_seconds) > 30 * 86400:
@@ -202,6 +215,7 @@ class Store:
         now = datetime.now(timezone.utc)
         schedule_id = str(uuid.uuid4())
         with self.connect() as db:
+            self._assert_case_monitor_write_access(db, case_id, created_by)
             db.execute("INSERT INTO monitor_schedules(id,case_id,target,interval_seconds,next_run_at,enabled,created_by,created_at) VALUES(?,?,?,?,?,?,?,?)",
                        (schedule_id, case_id, value, int(interval_seconds), now.isoformat(), 1, created_by, now.isoformat()))
         self.append_event(case_id, {"action": "monitor_schedule_created", "schedule_id": schedule_id,
@@ -250,15 +264,15 @@ class Store:
             raise ValueError("Monitoring interval must be between 1 hour and 30 days.")
         if not isinstance(config, dict):
             raise ValueError("Monitor settings must be a structured object.")
-        if kind == "telegram_channels":
-            with self.connect() as db:
-                exists = db.execute("SELECT 1 FROM content_monitors WHERE kind=? AND enabled=1 LIMIT 1",
-                                    (kind,)).fetchone()
-            if exists:
-                raise ValueError("Use one Telegram monitor containing all public channel usernames. Telegram uses one bot update cursor per bot token.")
         monitor_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
         with self.connect() as db:
+            self._assert_case_monitor_write_access(db, case_id, created_by)
+            if kind == "telegram_channels":
+                exists = db.execute("SELECT 1 FROM content_monitors WHERE kind=? AND enabled=1 LIMIT 1",
+                                    (kind,)).fetchone()
+                if exists:
+                    raise ValueError("Use one Telegram monitor containing all public channel usernames. Telegram uses one bot update cursor per bot token.")
             db.execute("""INSERT INTO content_monitors
                 (id,case_id,kind,config_json,interval_seconds,next_run_at,enabled,created_by,created_at)
                 VALUES(?,?,?,?,?,?,?,?,?)""",
