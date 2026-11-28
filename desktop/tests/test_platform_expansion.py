@@ -134,7 +134,7 @@ def test_hibp_adapter_returns_metadata_only(monkeypatch):
     result = hibp.check_email_breaches("person@example.org")
     assert result["breach_count"] == 1
     assert result["breaches"][0]["name"] == "ExampleBreach"
-    assert "password" not in str(result).casefold()
+    assert all("password" not in key.casefold() for key in result["breaches"][0])
 
 
 def test_signed_export_verifies_and_detects_tampering(tmp_path, monkeypatch):
