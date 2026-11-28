@@ -129,8 +129,10 @@ def monitor_bluesky_search(query: str, *, keywords: list[str] | None = None,
     posts = payload.get("posts", []) if isinstance(payload, dict) else []
     results = []
     for post in posts:
-        record = post.get("record", {})
-        author = post.get("author", {})
+        if not isinstance(post, dict):
+            continue
+        record = post.get("record") if isinstance(post.get("record"), dict) else {}
+        author = post.get("author") if isinstance(post.get("author"), dict) else {}
         text = str(record.get("text", ""))[:12000]
         handle = str(author.get("handle", ""))
         uri = str(post.get("uri", ""))
