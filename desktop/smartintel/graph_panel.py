@@ -78,7 +78,9 @@ class IdentityGraphPanel(QWidget):
         add_lead=QPushButton("Add lead"); add_lead.clicked.connect(self.add_manual_lead); self.add_lead_button=add_lead
         self.alias_from=QComboBox(); self.alias_to=QComboBox()
         merge=QPushButton("Merge alias → canonical"); merge.clicked.connect(self.merge_alias); self.merge_button=merge
-        for control in (self.add_kind,self.add_value,add_lead,self.alias_from,self.alias_to,merge): editor.addWidget(control)
+        self.undo_alias=QComboBox()
+        undo=QPushButton("Undo merge"); undo.clicked.connect(self.undo_merge); self.undo_button=undo
+        for control in (self.add_kind,self.add_value,add_lead,self.alias_from,self.alias_to,merge,self.undo_alias,undo): editor.addWidget(control)
         root.addLayout(editor)
         self.debounce=QTimer(self); self.debounce.setSingleShot(True); self.debounce.setInterval(250); self.debounce.timeout.connect(self.render_graph)
         split=QSplitter(Qt.Orientation.Horizontal); self.scene=QGraphicsScene(self); self.view=_GraphView(self.scene)
@@ -101,11 +103,15 @@ class IdentityGraphPanel(QWidget):
         self.refresh_alias_choices()
         self.schedule_render()
     def refresh_alias_choices(self):
-        self.alias_from.clear(); self.alias_to.clear()
+        self.alias_from.clear(); self.alias_to.clear(); self.undo_alias.clear()
         for node in (self.graph.nodes if self.graph else []):
             label = node.kind + ": " + node.label[:42]
             self.alias_from.addItem(label, node.id)
             self.alias_to.addItem(label, node.id)
+        for alias in self.store.graph_aliases(self.case_id):
+            self.undo_alias.addItem(alias["alias_node_id"][:44] + " → " +
+                                    alias["canonical_node_id"][:20],
+                                    alias["alias_node_id"])
 
     def add_manual_lead(self):
         value = self.add_value.text().strip()
@@ -140,6 +146,20 @@ class IdentityGraphPanel(QWidget):
             self.refresh()
         except Exception as exc:
             QMessageBox.warning(self, "Graph merge failed", str(exc))
+
+    def undo_merge(self):
+        alias = self.undo_alias.currentData()
+        if not self.case_id or not alias:
+            return
+        answer = QMessageBox.question(self, "Undo analyst merge",
+            "Restore this alias as a separate graph node? Evidence remains unchanged.")
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            self.store.remove_graph_alias(self.case_id, alias, removed_by="analyst")
+            self.refresh()
+        except Exception as exc:
+            QMessageBox.warning(self, "Undo failed", str(exc))
 
     def schedule_render(self,*_):
         if self.graph:self.debounce.start()
