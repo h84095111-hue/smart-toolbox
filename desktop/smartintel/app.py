@@ -100,7 +100,7 @@ class MainWindow(QMainWindow):
         top=QHBoxLayout(); eyebrow=QLabel("INTELLIGENCE WORKSPACE"); eyebrow.setObjectName("eyebrow"); top.addWidget(eyebrow); top.addStretch()
         self.status=QLabel("Ready"); self.status.setObjectName("muted"); top.addWidget(self.status); mv.addLayout(top)
         hero=QLabel("Investigate the public web.\nConnect evidence. Find the signal."); hero.setObjectName("heading"); hero.setStyleSheet("background:#182449;border:1px solid #38457a;border-radius:12px;padding:18px"); mv.addWidget(hero)
-        self.tabs=QTabWidget(); self.tabs.addTab(self.collect_tab(),"Collect"); self.integrations=IntegrationsPanel(); self.integrations.finding_ready.connect(self.integration_done); self.tabs.addTab(self.integrations,"OSINT Sources"); self.tabs.addTab(self.evidence_tab(),"Evidence & Timeline"); self.tabs.addTab(self.ai_tab(),"AI Analyst"); self.tabs.addTab(self.report_tab(),"Reports"); self.graph_panel=IdentityGraphPanel(self.store); self.tabs.addTab(self.graph_panel,"Identity Graph"); mv.addWidget(self.tabs,1)
+        self.tabs=QTabWidget(); self.tabs.addTab(self.collect_tab(),"Collect"); self.integrations=IntegrationsPanel(); self.integrations.finding_ready.connect(self.integration_done); self.integrations.workflow_ready.connect(self.workflow_done); self.tabs.addTab(self.integrations,"OSINT Sources"); self.tabs.addTab(self.evidence_tab(),"Evidence & Timeline"); self.tabs.addTab(self.ai_tab(),"AI Analyst"); self.tabs.addTab(self.report_tab(),"Reports"); self.graph_panel=IdentityGraphPanel(self.store); self.tabs.addTab(self.graph_panel,"Identity Graph"); mv.addWidget(self.tabs,1)
         row.addWidget(main,1); self.setCentralWidget(root); self.refresh_cases()
         if self.case_list.count():self.case_list.setCurrentRow(0)
         else:self.new_case()
@@ -117,6 +117,11 @@ class MainWindow(QMainWindow):
         self.tabs.setCurrentIndex(1)
         self.integrations.target.setText(self.target.text().strip())
         self.integrations.run_all_sources()
+    def workflow_done(self,result):
+        if not self.require_case(): return
+        self.store.workflow_events(self.case_id,result.get("run_id","unknown"),result.get("events",[]))
+        append_audit(APP_DIR/"audit.jsonl",{"action":"workflow_completed","case_id":self.case_id,"run_id":result.get("run_id"),"status":result.get("status"),"event_count":len(result.get("events",[]))})
+        self.status.setText("Workflow events saved to case audit")
     def integration_done(self, finding):
         if not self.require_case(): return
         item=Evidence(self.case_id,finding.get("source","Unknown"),finding.get("title","OSINT finding"),finding.get("url",""),finding.get("content",""),confidence=finding.get("confidence","Medium"),kind=finding.get("kind","Passive OSINT"))
