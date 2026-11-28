@@ -13,6 +13,8 @@ from smartintel.identity_checks import (
 def test_username_validation():
     assert _valid_username("@alice.test") == "alice.test"
     with pytest.raises(ValueError):
+        _valid_username("--help")
+    with pytest.raises(ValueError):
         _valid_username("alice;rm -rf")
 
 
