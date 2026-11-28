@@ -65,6 +65,8 @@ def poll_telegram_channels(config: dict) -> dict:
         if response.status_code != 200:
             raise RuntimeError("Telegram Bot API request failed with HTTP " + str(response.status_code) + ".")
         payload = response.json()
+        if not isinstance(payload, dict):
+            raise RuntimeError("Telegram returned an invalid JSON response.")
         if not payload.get("ok"):
             error = str(payload.get("description", "Telegram returned an API error."))[:220]
             raise RuntimeError("Telegram Bot API: " + error)
@@ -79,10 +81,12 @@ def poll_telegram_channels(config: dict) -> dict:
     next_offset = max([offset] + [int(row.get("update_id", 0)) + 1 for row in updates])
     results = []
     for update in updates:
+        if not isinstance(update, dict):
+            continue
         message = update.get("channel_post") or update.get("edited_channel_post")
         if not isinstance(message, dict):
             continue
-        chat = message.get("chat", {})
+        chat = message.get("chat") if isinstance(message.get("chat"), dict) else {}
         username = str(chat.get("username", "")).casefold()
         if not username or ("@" + username) not in channels:
             continue
