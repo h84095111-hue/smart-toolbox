@@ -1,10 +1,10 @@
 """PyQt6 UI for individual and all-in-one passive OSINT collection."""
 import json
 from PyQt6.QtCore import QThread,pyqtSignal
-from PyQt6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QLabel,QComboBox,QLineEdit,QPushButton,QPlainTextEdit,QMessageBox
+from PyQt6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QLabel,QComboBox,QLineEdit,QPushButton,QPlainTextEdit,QMessageBox,QDialog,QTableWidget,QTableWidgetItem,QHeaderView
 from .collectors import passive_sources as src
 from .collectors.all_in_one import run_all
-from .identity_checks import check_identity
+from .identity_checks import check_identity\nfrom .source_catalog import list_sources
 
 class _Task(QThread):
     done=pyqtSignal(object); failed=pyqtSignal(str)
@@ -31,7 +31,7 @@ class IntegrationsPanel(QWidget):
         v.addLayout(identity_row)
         row2=QHBoxLayout(); self.source=QComboBox(); self.source.addItems(["Certificate transparency (crt.sh)","Wayback Machine","VirusTotal domain","AbuseIPDB public IP","urlscan.io domain","AlienVault OTX domain","Shodan existing IP data","Censys existing IP data","SecurityTrails passive DNS","GDELT public news","Public username reference links","Authorized breach-check workflow","MISP exact IOC search"]); row2.addWidget(self.source,2)
         self.misp=QLineEdit(); self.misp.setPlaceholderText("Optional MISP HTTPS base URL"); row2.addWidget(self.misp,2)
-        self.run_button=QPushButton("Run selected source"); self.run_button.clicked.connect(self.run_lookup); row2.addWidget(self.run_button); v.addLayout(row2)
+        self.run_button=QPushButton("Run selected source"); self.run_button.clicked.connect(self.run_lookup); row2.addWidget(self.run_button); catalogue=QPushButton("Source catalogue"); catalogue.clicked.connect(self.show_catalogue); row2.addWidget(catalogue); v.addLayout(row2)
         self.output=QPlainTextEdit(); self.output.setReadOnly(True); self.output.setPlaceholderText("Scan progress, source status and findings appear here…"); v.addWidget(self.output,1)
         self.add_button=QPushButton("Add selected-source result to active case"); self.add_button.setEnabled(False); self.add_button.clicked.connect(self.add_result); v.addWidget(self.add_button)
         self._busy=False
@@ -112,6 +112,20 @@ class IntegrationsPanel(QWidget):
         self.output.setPlainText("\\n".join(lines))
         self.latest=None
         self.add_button.setEnabled(False)
+    def show_catalogue(self):
+        dialog=QDialog(self); dialog.setWindowTitle("Smart Intel source catalogue"); dialog.resize(900,560)
+        layout=QVBoxLayout(dialog)
+        summary=QLabel("Implemented means a callable connector is wired into the workflow. Planned, licensed and manual entries are catalogue metadata only.")
+        summary.setWordWrap(True); layout.addWidget(summary)
+        sources=list_sources()
+        table=QTableWidget(len(sources),6); table.setHorizontalHeaderLabels(["Source","Category","Access","Status","Credential environment","Notes"])
+        table.horizontalHeader().setSectionResizeMode(0,QHeaderView.ResizeMode.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(5,QHeaderView.ResizeMode.Stretch)
+        for row,source in enumerate(sources):
+            values=[source["name"],source["category"],source["access"],source["status"],", ".join(source.get("auth_env",[])),source.get("notes","")]
+            for col,value in enumerate(values): table.setItem(row,col,QTableWidgetItem(str(value)))
+        layout.addWidget(table); close=QPushButton("Close"); close.clicked.connect(dialog.accept); layout.addWidget(close)
+        dialog.exec()
     def run_lookup(self):
         value=self.target.text().strip()
         if not value: QMessageBox.information(self,"Target required","Enter a lookup value."); return
