@@ -56,3 +56,19 @@ def test_profile_metadata_fetch_uses_pinned_public_fetch(monkeypatch):
     assert calls == ["https://example.org/profile"]
     assert result["status"] == "completed"
     assert result["profile"]["title"] == "Public profile"
+
+
+def test_selected_source_uses_workflow_registry(monkeypatch):
+    from smartintel.collectors import all_in_one
+    from smartintel.workflow import CollectorRegistry, CollectorSpec
+    registry = CollectorRegistry()
+    registry.register(CollectorSpec(
+        name="demo_source",
+        run=lambda target, context: {"title": "demo", "content": target, "source": "test"},
+        target_types=("domain",),
+    ))
+    monkeypatch.setattr(all_in_one, "build_registry", lambda **kwargs: registry)
+    result = all_in_one.run_selected("example.org", "demo_source")
+    assert result["findings"][0]["content"] == "example.org"
+    assert result["events"][0]["type"] == "workflow_started"
+    assert result["events"][-1]["type"] == "workflow_completed"
