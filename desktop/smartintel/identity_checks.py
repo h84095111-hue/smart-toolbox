@@ -285,3 +285,56 @@ def extract_profile_metadata(html: str, page_url: str) -> dict[str, Any]:
         "rel_me_links": list(dict.fromkeys(same_as))[:30],
         "interpretation": "Public page metadata only. rel=me links are self-asserted links and require manual validation.",
     }
+
+
+class PivotQueue:
+    """Evidence-linked, analyst-approved username pivot queue.
+
+    Proposals never execute automatically. The analyst must approve each
+    identifier before a caller submits it to another collection run.
+    """
+    def __init__(self, *, max_depth: int = 2, max_targets: int = 25):
+        if not 0 <= max_depth <= 5 or not 1 <= max_targets <= 100:
+            raise ValueError("Pivot limits must be max_depth 0-5 and max_targets 1-100.")
+        self.max_depth = max_depth
+        self.max_targets = max_targets
+        self._items: dict[str, dict[str, Any]] = {}
+
+    def propose(self, username: str, *, source_url: str, reason: str, depth: int) -> dict[str, Any]:
+        candidate = _valid_username(username)
+        if depth < 1 or depth > self.max_depth:
+            raise ValueError("Pivot depth is outside the configured limit.")
+        if not source_url.startswith(("https://", "http://")):
+            raise ValueError("Every pivot must include an HTTP(S) evidence URL.")
+        if candidate in self._items:
+            return dict(self._items[candidate])
+        if len(self._items) >= self.max_targets:
+            raise ValueError("Pivot target limit reached.")
+        item = {
+            "username": candidate, "source_url": source_url, "reason": reason[:500],
+            "depth": depth, "status": "pending_analyst_approval",
+        }
+        self._items[candidate] = item
+        return dict(item)
+
+    def approve(self, username: str) -> dict[str, Any]:
+        candidate = _valid_username(username)
+        if candidate not in self._items:
+            raise KeyError("No such pivot proposal.")
+        self._items[candidate]["status"] = "approved"
+        return dict(self._items[candidate])
+
+    def list(self) -> list[dict[str, Any]]:
+        return [dict(item) for item in self._items.values()]
+
+
+def check_identity(identifier_type: str, value: str, **options: Any) -> dict[str, Any]:
+    """Dispatch a no-paid-API identity check by explicit identifier type."""
+    kind = (identifier_type or "").strip().lower()
+    if kind == "username":
+        return check_username(value, **options)
+    if kind == "email":
+        return inspect_email_domain(value, **options)
+    if kind == "phone":
+        return inspect_phone_number(value, **options)
+    raise ValueError("identifier_type must be username, email or phone")
