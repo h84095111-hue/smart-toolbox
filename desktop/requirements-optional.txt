@@ -4,4 +4,4 @@ playwright>=1.48,<2
 # EXIF metadata and local image similarity:
 Pillow>=10,<13
 # Full SQLite database page encryption:
-sqlcipher3-binary>=0.6.2,<0.7
+sqlcipher3-binary>=0.6,<0.7
