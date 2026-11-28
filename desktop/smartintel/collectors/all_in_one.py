@@ -52,6 +52,11 @@ def build_registry(*, misp_url: str = "", adapter_manager: AdapterManager | None
             mode="passive", target_types=tuple(target_types), enabled=True,
         ))
 
+    add("rdap", lambda target, kind: collect_ip(target) if kind == "ip" else collect_domain(target),
+        target_types=("domain", "url", "ip"), args=lambda target, context: (target, context["target_type"]))
+    add("public_website_metadata", collect_website, target_types=("url",),
+        args=lambda target, context: (context["original_target"],))
+    add("email_authorized_check_guidance", src.breach_check_guidance, target_types=("email",))
     add("crtsh", src.certificate_transparency, target_types=("domain", "url"))
     add("wayback", src.wayback, target_types=("domain", "url"),
         args=lambda target, context: (context.get("original_target", target),))
@@ -65,30 +70,6 @@ def build_registry(*, misp_url: str = "", adapter_manager: AdapterManager | None
     add("censys", src.censys_host, target_types=("ip",))
     add("public_username_reference", src.public_username_reference, target_types=("username",))
 
-    registry.register(CollectorSpec(
-        name="domain_rdap_dns_tls",
-        run=lambda target, context: collect_domain(target),
-        description="DNS, RDAP and TLS registration metadata",
-        target_types=("domain", "url"),
-    ))
-    registry.register(CollectorSpec(
-        name="ip_rdap_reverse_dns",
-        run=lambda target, context: collect_ip(target),
-        description="RDAP registration and reverse DNS",
-        target_types=("ip",),
-    ))
-    registry.register(CollectorSpec(
-        name="public_website_metadata",
-        run=lambda target, context: collect_website(context["original_target"]),
-        description="Passive public website metadata",
-        target_types=("url",),
-    ))
-    registry.register(CollectorSpec(
-        name="email_authorized_check_guidance",
-        run=lambda target, context: src.breach_check_guidance(target),
-        description="Authorized breach-notification guidance only",
-        target_types=("email",),
-    ))
     if misp_url.strip():
         registry.register(CollectorSpec(
             name="misp_exact_ioc",
@@ -113,7 +94,7 @@ def run_all(target, misp_url=""):
     result = run_workflow(
         normalized,
         build_registry(misp_url=misp_url),
-        context={"original_target": raw},
+        context={"original_target": raw, "target_type": target_type},
         target_type=target_type,
         policy=ExecutionPolicy(max_workers=6, timeout_seconds=60.0, allow_active=False),
     )
