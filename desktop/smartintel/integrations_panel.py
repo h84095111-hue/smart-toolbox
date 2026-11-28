@@ -23,7 +23,7 @@ class IntegrationsPanel(QWidget):
         row=QHBoxLayout(); self.target=QLineEdit(); self.target.setPlaceholderText("domain · public IP · URL · username · email"); row.addWidget(self.target,3)
         self.all_button=QPushButton("⚡  All-in-One Passive Scan"); self.all_button.setObjectName("primary"); self.all_button.clicked.connect(self.run_all_sources); row.addWidget(self.all_button,2); v.addLayout(row)
         identity_row=QHBoxLayout()
-        self.identity_type=QComboBox(); self.identity_type.addItems(["Username","Email","Phone"]); identity_row.addWidget(self.identity_type,1)
+        self.identity_type=QComboBox(); self.identity_type.addItems(["Username","Email","Phone","Profile URL"]); identity_row.addWidget(self.identity_type,1)
         self.site_limit=QComboBox(); self.site_limit.addItem("500 sites",500); self.site_limit.addItem("1,000 sites",1000); self.site_limit.addItem("2,000 sites",2000); self.site_limit.addItem("3,000 sites",3000); identity_row.addWidget(self.site_limit,1)
         self.identity_type.currentTextChanged.connect(lambda kind: self.site_limit.setEnabled(kind=="Username"))
         self.identity_button=QPushButton("🔎  No-API Identity Check"); self.identity_button.clicked.connect(self.run_identity_check); identity_row.addWidget(self.identity_button,2)
@@ -59,7 +59,7 @@ class IntegrationsPanel(QWidget):
         if not value:
             QMessageBox.information(self,"Identifier required","Enter a username, email address or phone number.")
             return
-        kind=self.identity_type.currentText().lower()
+        kind=self.identity_type.currentText().lower().replace(" ","_")
         options={"max_sites":int(self.site_limit.currentData())} if kind=="username" else ({"default_region":"MY"} if kind=="phone" else {})
         self.set_busy(True)
         self.output.setPlainText(f"NO-API {kind.upper()} CHECK\\nTarget: {value}\\n\\nRunning local/public-source checks…")
@@ -76,6 +76,17 @@ class IntegrationsPanel(QWidget):
         if result.get("e164"): lines.append(f"Normalized: {result['e164']}")
         if result.get("domain"): lines.append(f"Mail domain: {result['domain']} | DNS: {result.get('mail_dns_status')}")
         if result.get("region"): lines.append(f"Region: {result['region']} | Number type: {result.get('number_type')}")
+        profile=result.get("profile",{})
+        if profile:
+            lines.extend(["",f"Profile title: {profile.get('title','')}",
+                          f"Display name: {profile.get('display_name','')}",
+                          f"Description: {profile.get('description','')}",
+                          f"Canonical URL: {profile.get('canonical_url','')}"])
+        pivots=result.get("pivot_candidates",[])
+        if pivots:
+            lines.extend(["","PIVOT CANDIDATES — analyst approval required"])
+            for pivot in pivots:
+                lines.append(f"[PENDING] {pivot['username']} — {pivot['url']}")
         findings=result.get("findings",[])
         lines.extend(["",f"Candidate profiles: {len(findings)}"])
         for item in findings:
