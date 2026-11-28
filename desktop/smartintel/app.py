@@ -8,6 +8,7 @@ from .models import Evidence
 from .collectors.passive import collect_domain, collect_ip, collect_website
 from .providers.ai import analyze, save_api_key, get_api_key, delete_api_key
 from .integrations_panel import IntegrationsPanel
+from .graph_panel import IdentityGraphPanel
 from .evidence_integrity import append_audit, verify_audit
 from .exports import export_json, export_csv, export_stix, export_pdf, export_docx
 from .config import APP_DIR
@@ -88,7 +89,7 @@ class MainWindow(QMainWindow):
         self.case_list=QListWidget(); self.case_list.currentRowChanged.connect(self.case_selected); sv.addWidget(self.case_list,1)
         new=QPushButton("+  New investigation"); new.setObjectName("primary"); new.clicked.connect(self.new_case); sv.addWidget(new)
         self.nav=[]
-        for text,idx in [("⌕  Collect intelligence",0),("◉  OSINT source hub",1),("▤  Evidence & timeline",2),("⌘  AI analyst",3),("▤  Reports",4)]:
+        for text,idx in [("⌕  Collect intelligence",0),("◉  OSINT source hub",1),("▤  Evidence & timeline",2),("⌘  AI analyst",3),("▤  Reports",4),("◎  Identity graph",5)]:
             b=QPushButton(text); b.clicked.connect(lambda _,i=idx:self.tabs.setCurrentIndex(i)); sv.addWidget(b)
         settings=QPushButton("⚙  AI provider settings"); settings.clicked.connect(lambda:SettingsDialog(self).exec()); sv.addWidget(settings)
         privacy=QLabel("● PASSIVE PUBLIC-SOURCE MODE\nNo login attempts · No exploitation\nEvidence stored locally"); privacy.setStyleSheet("color:#8fe0bd;background:#142b30;border:1px solid #28534f;border-radius:8px;padding:12px;font-size:11px"); sv.addWidget(privacy)
@@ -97,7 +98,7 @@ class MainWindow(QMainWindow):
         top=QHBoxLayout(); eyebrow=QLabel("INTELLIGENCE WORKSPACE"); eyebrow.setObjectName("eyebrow"); top.addWidget(eyebrow); top.addStretch()
         self.status=QLabel("Ready"); self.status.setObjectName("muted"); top.addWidget(self.status); mv.addLayout(top)
         hero=QLabel("Investigate the public web.\nConnect evidence. Find the signal."); hero.setObjectName("heading"); hero.setStyleSheet("background:#182449;border:1px solid #38457a;border-radius:12px;padding:18px"); mv.addWidget(hero)
-        self.tabs=QTabWidget(); self.tabs.addTab(self.collect_tab(),"Collect"); self.integrations=IntegrationsPanel(); self.integrations.finding_ready.connect(self.integration_done); self.tabs.addTab(self.integrations,"OSINT Sources"); self.tabs.addTab(self.evidence_tab(),"Evidence & Timeline"); self.tabs.addTab(self.ai_tab(),"AI Analyst"); self.tabs.addTab(self.report_tab(),"Reports"); mv.addWidget(self.tabs,1)
+        self.tabs=QTabWidget(); self.tabs.addTab(self.collect_tab(),"Collect"); self.integrations=IntegrationsPanel(); self.integrations.finding_ready.connect(self.integration_done); self.tabs.addTab(self.integrations,"OSINT Sources"); self.tabs.addTab(self.evidence_tab(),"Evidence & Timeline"); self.tabs.addTab(self.ai_tab(),"AI Analyst"); self.tabs.addTab(self.report_tab(),"Reports"); self.graph_panel=IdentityGraphPanel(self.store); self.tabs.addTab(self.graph_panel,"Identity Graph"); mv.addWidget(self.tabs,1)
         row.addWidget(main,1); self.setCentralWidget(root); self.refresh_cases()
         if self.case_list.count():self.case_list.setCurrentRow(0)
         else:self.new_case()
@@ -119,7 +120,7 @@ class MainWindow(QMainWindow):
         item=Evidence(self.case_id,finding.get("source","Unknown"),finding.get("title","OSINT finding"),finding.get("url",""),finding.get("content",""),confidence=finding.get("confidence","Medium"),kind=finding.get("kind","Passive OSINT"))
         self.store.add_evidence(item)
         append_audit(APP_DIR/"audit.jsonl",{"action":"evidence_added","case_id":self.case_id,"evidence_id":item.id,"source":item.source,"title":item.title})
-        self.refresh_evidence(); self.status.setText("OSINT finding added to case")
+        self.refresh_evidence(); self.graph_panel.refresh(); self.status.setText("OSINT finding added to case")
     def evidence_tab(self):
         w=QWidget(); v=QVBoxLayout(w); self.table=QTableWidget(0,5); self.table.setHorizontalHeaderLabels(["Observed UTC","Title","Source","Confidence","URL"])
         self.table.horizontalHeader().setSectionResizeMode(1,QHeaderView.ResizeMode.Stretch); self.table.horizontalHeader().setSectionResizeMode(4,QHeaderView.ResizeMode.Stretch); self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows); self.table.itemSelectionChanged.connect(self.show_evidence); v.addWidget(self.table,2)
@@ -149,7 +150,7 @@ class MainWindow(QMainWindow):
             self.case_list.setCurrentRow(next(i for i,c in enumerate(self.cases) if c["id"]==cid))
     def case_selected(self,i):
         if i<0 or i>=len(getattr(self,"cases",[])):return
-        self.case_id=self.cases[i]["id"]; self.case_label.setText("ACTIVE CASE"); self.refresh_evidence()
+        self.case_id=self.cases[i]["id"]; self.case_label.setText("ACTIVE CASE"); self.refresh_evidence(); self.graph_panel.set_case(self.case_id)
     def collect(self):
         if not self.require_case():return
         value=self.target.text().strip()
@@ -161,7 +162,7 @@ class MainWindow(QMainWindow):
         for f in findings:
             item=Evidence(self.case_id,f.source,f.title,f.url,f.value,confidence=f.confidence,kind="OSINT finding"); self.store.add_evidence(item); append_audit(APP_DIR/"audit.jsonl",{"action":"evidence_added","case_id":self.case_id,"evidence_id":item.id,"source":item.source,"title":item.title})
             self.collect_log.appendPlainText(f"\n[{f.confidence}] {f.title}\nSource: {f.source}\nURL: {f.url}\n{f.value[:4500]}")
-        self.status.setText(f"Collected {len(findings)} findings"); self.refresh_evidence()
+        self.status.setText(f"Collected {len(findings)} findings"); self.refresh_evidence(); self.graph_panel.refresh()
     def failed(self,msg):self.status.setText("Task failed"); QMessageBox.warning(self,"Task failed",msg)
     def refresh_evidence(self):
         if not self.case_id:return
