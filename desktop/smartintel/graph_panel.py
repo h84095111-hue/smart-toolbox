@@ -41,7 +41,7 @@ class IdentityGraphPanel(QWidget):
         note=QLabel("Nodes are extracted identifiers and source records. Lines mean “observed in this evidence”, not confirmed identity.")
         note.setWordWrap(True); note.setStyleSheet("color:#91a2bd"); root.addWidget(note)
         split=QSplitter(Qt.Orientation.Horizontal)
-        self.scene=QGraphicsScene(self); self.view=QGraphicsView(self.scene); self.view.setRenderHint(self.view.renderHints())
+        self.scene=QGraphicsScene(self); self.view=QGraphicsView(self.scene)
         self.view.setMinimumHeight(360); self.view.setStyleSheet("background:#091323;border:1px solid #263650;border-radius:8px")
         split.addWidget(self.view)
         side=QWidget(); sv=QVBoxLayout(side); self.detail=QTextBrowser(); self.detail.setMinimumWidth(270); sv.addWidget(self.detail,1)
@@ -81,16 +81,16 @@ class IdentityGraphPanel(QWidget):
         self.selected=node
         related=[e for e in self.evidence if e.id in node.evidence_ids]
         sources={e.source for e in related}
-        risk=assess_false_positive_risk(independent_sources=max(0,len(sources)-1))
+        risk=assess_false_positive_risk()
         self.risk.setText(f"False-positive risk index: {risk.score}/100 ({risk.risk_band.upper()})\nUncalibrated heuristic — not a probability.")
-        lines=[f"{node.kind.upper()}: {node.label}",f"Supporting evidence records: {len(related)}",""]
+        lines=[f"{node.kind.upper()}: {node.label}",f"Supporting evidence records: {len(related)}",f"Distinct source labels: {len(sources)} (independence not assumed)",""]
         for e in related:
             lines.extend([f"• {e.title}",f"  Source: {e.source}",f"  Evidence ID: {e.id}",f"  URL: {e.url or 'Not supplied'}",""])
         self.detail.setPlainText("\n".join(lines))
     def run_analysis(self):
         if not self.graph or not self.evidence:
             QMessageBox.information(self,"No graph","Collect or add evidence to this case first."); return
-        risk=(assess_false_positive_risk(independent_sources=max(0,len({e.source for e in self.evidence})-1))).to_dict()
+        risk=(assess_false_positive_risk()).to_dict()
         question="Analyze this case graph. Identify supported connections, weak leads, contradictions and safe next steps."
         self.analyze_btn.setEnabled(False); self.status.setText("AI analysis running…")
         self.task=_AnalystTask(question,self.graph.to_dict(),risk,self.provider.currentText(),self.evidence)
