@@ -197,6 +197,69 @@ class MainWindow(QMainWindow):
         self.case_list.blockSignals(True); self.case_list.clear(); self.cases=self.store.cases_for_user(self.current_user)
         for c in self.cases:self.case_list.addItem(c["name"])
         self.case_list.blockSignals(False)
+    def manage_team(self):
+        if not self.current_user or self.current_user.get("role") != "admin":
+            QMessageBox.warning(self, "Administrator only", "Only an administrator can create or disable local accounts.")
+            return
+        username, ok = QInputDialog.getText(self, "Create local account", "Username:")
+        if not ok or not username.strip():
+            return
+        password, ok = QInputDialog.getText(self, "Create local account", "Password (12+ characters):",
+                                             QLineEdit.EchoMode.Password)
+        if not ok:
+            return
+        role, ok = QInputDialog.getItem(self, "Account role", "Role:", ["analyst", "viewer"], 0, False)
+        if not ok:
+            return
+        try:
+            user_id = self.store.create_user(username.strip(), password, role)
+            if self.case_id:
+                answer = QMessageBox.question(self, "Share active case",
+                    "Assign this new account to the active case as well?")
+                if answer == QMessageBox.StandardButton.Yes:
+                    self.store.add_case_member(self.case_id, user_id, role)
+            QMessageBox.information(self, "Account created",
+                "Local account created. Share individual cases using the Share active case control.")
+        except Exception as exc:
+            QMessageBox.warning(self, "Account not created", str(exc))
+
+    def share_case(self):
+        if not self.require_case(write=True):
+            return
+        if not self.current_user or self.current_user.get("role") != "admin":
+            role = self.store.user_case_role(self.case_id, self.current_user)
+            if role != "owner":
+                QMessageBox.warning(self, "Permission denied", "Only a case owner or administrator can share this case.")
+                return
+        users = self.store.list_users()
+        members = {item["id"] for item in self.store.case_members(self.case_id)}
+        candidates = [item for item in users if not item["disabled"] and item["id"] not in members]
+        if not candidates:
+            QMessageBox.information(self, "No available accounts", "Create another account or remove an existing membership first.")
+            return
+        labels = [item["username"] + " (" + item["role"] + ")" for item in candidates]
+        selected, ok = QInputDialog.getItem(self, "Share active case", "Account:", labels, 0, False)
+        if not ok:
+            return
+        member = candidates[labels.index(selected)]
+        role, ok = QInputDialog.getItem(self, "Case role", "Grant role:", ["analyst", "viewer"], 0, False)
+        if not ok:
+            return
+        try:
+            self.store.add_case_member(self.case_id, member["id"], role)
+            append_audit(APP_DIR/"audit.jsonl", {"action":"case_shared","case_id":self.case_id,
+                "user_id":member["id"],"role":role,"shared_by":self.current_user["id"]})
+            QMessageBox.information(self, "Case shared", member["username"] + " now has " + role + " access.")
+            self.refresh_cases()
+        except Exception as exc:
+            QMessageBox.warning(self, "Sharing failed", str(exc))
+
+    def monitoring_evidence_added(self, case_id):
+        if case_id == self.case_id:
+            self.refresh_evidence()
+            self.graph_panel.refresh()
+            self.status.setText("Scheduled passive monitor added case evidence.")
+
     def new_case(self):
         name,ok=QInputDialog.getText(self,"New investigation","Case name:")
         if ok and name.strip():
@@ -487,5 +550,50 @@ class MainWindow(QMainWindow):
             try: Path(path).write_text(data,encoding="utf-8"); QMessageBox.information(self,"Exported","Report saved.")
             except Exception as exc: QMessageBox.critical(self,"Export failed",str(exc))
 
+def _authenticate_desktop_user(store):
+    if store.users_count() == 0:
+        username, ok = QInputDialog.getText(None, "First-run administrator setup",
+                                             "Create the first administrator username:")
+        if not ok or not username.strip():
+            return None
+        password, ok = QInputDialog.getText(None, "First-run administrator setup",
+                                             "Administrator password (at least 12 characters):",
+                                             QLineEdit.EchoMode.Password)
+        if not ok:
+            return None
+        try:
+            user_id = store.create_user(username.strip(), password, "admin")
+            return {"id": user_id, "username": username.strip(), "role": "admin"}
+        except Exception as exc:
+            QMessageBox.critical(None, "Account setup failed", str(exc))
+            return None
+
+    while True:
+        username, ok = QInputDialog.getText(None, "Smart Intel sign in", "Username:")
+        if not ok:
+            return None
+        password, ok = QInputDialog.getText(None, "Smart Intel sign in", "Password:",
+                                             QLineEdit.EchoMode.Password)
+        if not ok:
+            return None
+        user = store.authenticate_user(username, password)
+        if user:
+            return user
+        QMessageBox.warning(None, "Sign in failed", "Invalid username or password, or the account is disabled.")
+
+
 def main():
-    app=QApplication(sys.argv); app.setApplicationName("Smart Intel"); app.setStyleSheet(STYLE); window=MainWindow(); window.show(); sys.exit(app.exec())
+    app=QApplication(sys.argv)
+    app.setApplicationName("Smart Intel")
+    app.setStyleSheet(STYLE)
+    try:
+        store=Store()
+        user=_authenticate_desktop_user(store)
+        if not user:
+            return
+        window=MainWindow(user)
+        window.show()
+        sys.exit(app.exec())
+    except Exception as exc:
+        QMessageBox.critical(None, "Smart Intel startup failed", str(exc))
+        raise
