@@ -10,6 +10,8 @@ from .providers.ai import analyze, save_api_key, get_api_key, delete_api_key
 from .integrations_panel import IntegrationsPanel
 from .graph_panel import IdentityGraphPanel
 from .evidence_integrity import append_audit, verify_audit
+from .secure_vault import make_warc_record
+import tempfile
 from .exports import export_json, export_csv, export_stix, export_pdf, export_docx
 from .config import APP_DIR
 
@@ -125,7 +127,25 @@ class MainWindow(QMainWindow):
         w=QWidget(); v=QVBoxLayout(w); self.table=QTableWidget(0,5); self.table.setHorizontalHeaderLabels(["Observed UTC","Title","Source","Confidence","URL"])
         self.table.horizontalHeader().setSectionResizeMode(1,QHeaderView.ResizeMode.Stretch); self.table.horizontalHeader().setSectionResizeMode(4,QHeaderView.ResizeMode.Stretch); self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows); self.table.itemSelectionChanged.connect(self.show_evidence); v.addWidget(self.table,2)
         self.detail=QPlainTextEdit(); self.detail.setReadOnly(True); v.addWidget(self.detail,1)
-        audit_row=QHBoxLayout(); verify=QPushButton("Verify audit chain"); verify.clicked.connect(self.verify_audit_chain); audit_row.addWidget(verify); audit_row.addStretch(); v.addLayout(audit_row); return w
+        vault_group=QGroupBox("Evidence vault — encrypted payloads and attachments")
+        vault_layout=QVBoxLayout(vault_group)
+        self.vault_status_label=QLabel("Evidence payload encryption is not enabled.")
+        self.vault_status_label.setWordWrap(True); vault_layout.addWidget(self.vault_status_label)
+        vault_buttons=QHBoxLayout()
+        enable=QPushButton("Enable encryption"); enable.clicked.connect(self.enable_vault); vault_buttons.addWidget(enable)
+        import_file=QPushButton("Import attachment"); import_file.clicked.connect(lambda:self.import_attachment("attachment")); vault_buttons.addWidget(import_file)
+        import_image=QPushButton("Import screenshot"); import_image.clicked.connect(lambda:self.import_attachment("screenshot")); vault_buttons.addWidget(import_image)
+        archive=QPushButton("Create WARC from file"); archive.clicked.connect(self.archive_as_warc); vault_buttons.addWidget(archive)
+        export_attachment=QPushButton("Export selected"); export_attachment.clicked.connect(self.export_attachment); vault_buttons.addWidget(export_attachment)
+        vault_layout.addLayout(vault_buttons)
+        self.attach_table=QTableWidget(0,5); self.attach_table.setHorizontalHeaderLabels(["Filename","Type","Size","SHA-256","Added UTC"])
+        self.attach_table.horizontalHeader().setSectionResizeMode(0,QHeaderView.ResizeMode.Stretch)
+        self.attach_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        vault_layout.addWidget(self.attach_table)
+        v.addWidget(vault_group)
+        audit_row=QHBoxLayout(); verify=QPushButton("Verify audit chain"); verify.clicked.connect(self.verify_audit_chain); audit_row.addWidget(verify)
+        verify_db=QPushButton("Verify case event chain"); verify_db.clicked.connect(self.verify_case_event_chain); audit_row.addWidget(verify_db)
+        audit_row.addStretch(); v.addLayout(audit_row); return w
     def ai_tab(self):
         w=QWidget(); v=QVBoxLayout(w); note=QLabel("Analyze evidence already collected in this case. The assistant is instructed to separate facts, inferences and unknowns."); note.setWordWrap(True); note.setObjectName("muted"); v.addWidget(note)
         r=QHBoxLayout(); self.provider=QComboBox(); self.provider.addItems(["OpenAI","Gemini","Claude"]); r.addWidget(QLabel("Provider")); r.addWidget(self.provider); r.addStretch(); v.addLayout(r)
@@ -150,7 +170,7 @@ class MainWindow(QMainWindow):
             self.case_list.setCurrentRow(next(i for i,c in enumerate(self.cases) if c["id"]==cid))
     def case_selected(self,i):
         if i<0 or i>=len(getattr(self,"cases",[])):return
-        self.case_id=self.cases[i]["id"]; self.case_label.setText("ACTIVE CASE"); self.refresh_evidence(); self.graph_panel.set_case(self.case_id)
+        self.case_id=self.cases[i]["id"]; self.case_label.setText("ACTIVE CASE"); self.refresh_evidence(); self.refresh_attachments(); self.graph_panel.set_case(self.case_id)
     def collect(self):
         if not self.require_case():return
         value=self.target.text().strip()
@@ -200,6 +220,62 @@ class MainWindow(QMainWindow):
             else: exporter(items,path)
             QMessageBox.information(self,"Exported",f"Export saved to:\n{path}")
         except Exception as exc: QMessageBox.critical(self,"Export failed",str(exc))
+    def refresh_attachments(self):
+        if not self.case_id or not hasattr(self,"attach_table"): return
+        rows=self.store.attachments(self.case_id); self.attachments=rows; self.attach_table.setRowCount(len(rows))
+        for i,item in enumerate(rows):
+            values=[item["filename"],item["kind"],str(item["size"]),item["sha256"],item["created_at"][:19]]
+            for j,value in enumerate(values): self.attach_table.setItem(i,j,QTableWidgetItem(value))
+        status=self.store.vault_status()
+        self.vault_status_label.setText(("Encrypted evidence payloads are enabled. " if status["enabled"] else "Encryption is not enabled. ")+status["scope"])
+    def enable_vault(self):
+        if QMessageBox.question(self,"Enable evidence encryption","Create/use an encryption key in the operating-system credential store and encrypt all existing evidence content? Keep your OS credential-store access: losing the key means losing access to encrypted evidence.") != QMessageBox.StandardButton.Yes: return
+        try:
+            self.store.enable_evidence_encryption()
+            self.refresh_evidence(); self.refresh_attachments()
+            QMessageBox.information(self,"Vault enabled","Evidence content is now encrypted at rest. Case names and other SQLite metadata remain plaintext.")
+        except Exception as exc: QMessageBox.critical(self,"Vault error",str(exc))
+    def import_attachment(self,kind):
+        if not self.require_case(): return
+        path,_=QFileDialog.getOpenFileName(self,"Import evidence attachment")
+        if not path: return
+        try:
+            if not self.store.vault_status()["enabled"]:
+                QMessageBox.information(self,"Enable encryption","Enable evidence encryption before importing files into the vault."); return
+            row=self.store.add_attachment(self.case_id,path,kind=kind)
+            append_audit(APP_DIR/"audit.jsonl",{"action":"attachment_added","case_id":self.case_id,"attachment_id":row["id"],"filename":row["filename"],"sha256":row["sha256"],"kind":kind})
+            self.refresh_attachments(); self.status.setText("Encrypted attachment imported")
+        except Exception as exc: QMessageBox.critical(self,"Import failed",str(exc))
+    def archive_as_warc(self):
+        if not self.require_case(): return
+        source,_=QFileDialog.getOpenFileName(self,"Select file to wrap in WARC")
+        if not source: return
+        try:
+            if not self.store.vault_status()["enabled"]:
+                QMessageBox.information(self,"Enable encryption","Enable evidence encryption before creating WARC records."); return
+            record=make_warc_record(source)
+            with tempfile.NamedTemporaryFile(prefix="smartintel-",suffix=".warc",delete=False) as handle:
+                handle.write(record); temp_path=Path(handle.name)
+            try: row=self.store.add_attachment(self.case_id,temp_path,kind="warc")
+            finally: temp_path.unlink(missing_ok=True)
+            append_audit(APP_DIR/"audit.jsonl",{"action":"warc_imported","case_id":self.case_id,"attachment_id":row["id"],"source_filename":Path(source).name,"sha256":row["sha256"]})
+            self.refresh_attachments(); self.status.setText("Encrypted WARC resource record created")
+        except Exception as exc: QMessageBox.critical(self,"WARC creation failed",str(exc))
+    def export_attachment(self):
+        rows=self.attach_table.selectionModel().selectedRows() if hasattr(self,"attach_table") else []
+        if not rows: QMessageBox.information(self,"Select attachment","Select an attachment first."); return
+        item=self.attachments[rows[0].row()]
+        path,_=QFileDialog.getSaveFileName(self,"Export decrypted attachment",item["filename"])
+        if not path: return
+        try:
+            data=self.store.read_attachment(item["id"]); Path(path).write_bytes(data)
+            append_audit(APP_DIR/"audit.jsonl",{"action":"attachment_exported","case_id":self.case_id,"attachment_id":item["id"],"filename":item["filename"],"sha256":item["sha256"]})
+            QMessageBox.information(self,"Exported","Decrypted attachment exported.")
+        except Exception as exc: QMessageBox.critical(self,"Export failed",str(exc))
+    def verify_case_event_chain(self):
+        ok,count=self.store.verify_event_chain()
+        if ok: QMessageBox.information(self,"Case event verification",f"Database event chain valid. Verified {count} events.")
+        else: QMessageBox.warning(self,"Case event verification failed",f"Database event chain invalid after {count} verified events.")
     def verify_audit_chain(self):
         ok,count=verify_audit(APP_DIR/"audit.jsonl")
         if ok: QMessageBox.information(self,"Audit verification",f"Audit chain valid. Verified {count} entries.")
