@@ -6,6 +6,7 @@ import pytest
 from smartintel.identity_checks import (
     _valid_username, check_username, extract_profile_metadata,
     inspect_email_domain, inspect_phone_number, parse_maigret_report,
+    PivotQueue, check_identity,
 )
 
 
@@ -62,3 +63,26 @@ def test_profile_metadata_extracts_public_fields():
     result = extract_profile_metadata(html, "https://example.com/@alice")
     assert result["display_name"] == "Alice Example"
     assert result["rel_me_links"] == ["https://github.com/alice"]
+
+
+
+def test_pivot_queue_requires_explicit_approval_and_evidence():
+    queue = PivotQueue(max_depth=2, max_targets=3)
+    item = queue.propose("alice2", source_url="https://example.org/profile/alice",
+                         reason="Public profile links to this handle", depth=1)
+    assert item["status"] == "pending_analyst_approval"
+    assert queue.list()[0]["status"] == "pending_analyst_approval"
+    assert queue.approve("alice2")["status"] == "approved"
+
+
+def test_pivot_queue_enforces_depth_and_evidence():
+    queue = PivotQueue(max_depth=1)
+    with pytest.raises(ValueError):
+        queue.propose("alice2", source_url="https://example.org/a", reason="test", depth=2)
+    with pytest.raises(ValueError):
+        queue.propose("alice3", source_url="file:///tmp/a", reason="test", depth=1)
+
+
+def test_identity_dispatcher_rejects_unknown_type():
+    with pytest.raises(ValueError):
+        check_identity("password", "anything")
