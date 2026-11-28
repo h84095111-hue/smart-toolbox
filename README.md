@@ -1,109 +1,102 @@
 # Smart Intel — AI OSINT Workstation
 
-**A cross-platform, AI-assisted OSINT desktop application built with Python + PyQt6.** Organize public-source research into cases, correlate findings, and analyze evidence with OpenAI, Gemini or Claude.
+**A cross-platform, AI-assisted OSINT desktop application built with Python and PyQt6.** Organize public-source research into cases, correlate findings, review evidence and use AI to help analyze what is known — and what is still unknown.
 
-> This project replaces the original browser-based Smart Toolbox. The primary product is now the PyQt6 desktop app in [desktop/](desktop/).
+> The primary application is the PyQt6 desktop app in [desktop/](desktop/). This project is intended for lawful, authorized research of public information.
 
-## Desktop interface
+## Interface previews
 
-![Smart Intel desktop concept preview](desktop/assets/smart-intel-preview.svg)
+The following artwork previews the current application's dark-first layout and major work areas. The records and identifiers shown are fictional sample data. These are **illustrative UI previews**, not screenshots captured from a running installation.
 
-*Illustrative concept artwork only — not a screenshot of the running application. A real screenshot is still required before release.*
+### Investigation workspace
 
-## Available now
+![Smart Intel investigation workspace preview](desktop/assets/readme-workspace.svg)
 
-- PyQt6 desktop shell with a refined dark-first interface, local SQLite cases, evidence table and AI analyst.
-- One-click **All-in-One Passive Scan**: auto-detects domain, public IP, URL, username or email, runs the relevant built-in collectors and configured OSINT providers, and keeps going when individual providers fail.
-- Passive DNS/RDAP/TLS and public website metadata collection.
-- Optional provider lookups: crt.sh certificate transparency, Wayback CDX, VirusTotal, AbuseIPDB, urlscan.io, AlienVault OTX, Shodan existing-host data, Censys existing-host data, SecurityTrails passive DNS, GDELT news and user-configured MISP exact-IOC search.
-- Public username profile reference links (no account scraping or identity verification).
-- Authorized breach-check workflow guidance; no stolen credential dumps.
-- Interactive evidence/identity graph with provenance, same-record identifier correlation, mouse-wheel zoom and drag navigation.\n- Evidence-derived explainable false-positive caution factors; still an uncalibrated heuristic, never a statistical probability.\n- Local Ollama and cloud AI analysis receive the structured graph, risk factors and evidence context.\n- Passive collection CLI: `python -m smartintel.cli <target> --output findings.json`.
-- Explainable false-positive risk index (uncalibrated heuristic, not a statistical probability).
-- Evidence deduplication, heuristic source credibility and transparent triage scoring helpers.
-- Hash-linked JSONL audit journal, SHA-256 attachment hashing, optional Fernet encryption and Ed25519 signing helpers.
-- JSON, CSV, STIX 2.1 note-bundle and DOCX export helpers; existing HTML report export.
-- Automated tests for core safety, audit integrity, analysis helpers and exports.
+### Evidence graph and relationship analysis
+
+![Smart Intel identity graph preview](desktop/assets/readme-graph.svg)
+
+### Social, Telegram and Tor monitoring
+
+![Smart Intel public-content monitoring preview](desktop/assets/readme-social-monitoring.svg)
+
+## What it includes
+
+- **Case-based investigation workspace** — local SQLite cases, evidence records, source provenance and user/case roles.
+- **Passive collection workflows** — DNS, RDAP, TLS certificate and public website metadata collection, plus an All-in-One workflow that selects relevant collectors for the target type.
+- **OSINT source hub** — integrations and lookup workflows for crt.sh, Wayback CDX, VirusTotal, AbuseIPDB, urlscan.io, AlienVault OTX, Shodan and Censys existing-host data, SecurityTrails passive DNS, GDELT, MISP exact-IOC search, public username reference links, and selected company/court/sanctions and authorized breach metadata sources. Provider keys, access, quotas and licensing conditions apply.
+- **AI-assisted analysis** — local Ollama or optional OpenAI, Gemini and Claude providers. AI output is an analytical aid; it is not source verification.
+- **Identity/evidence graph** — inspect identifiers and the evidence records where they appeared, with provenance and explainable triage factors. Graph links do not prove that two identifiers belong to the same person.
+- **Evidence handling** — timeline filters, attachment hashing, optional encrypted evidence payloads, audit-event verification, signed export bundles, and optional SQLCipher database encryption.
+- **Analyst utilities** — browser screenshot capture with Playwright, WARC records, local image metadata/EXIF inspection, image hashing and local image comparison.
+- **Reports and exports** — JSON, CSV, STIX 2.1 note bundles, DOCX and PDF export helpers, plus HTML reports from the desktop interface.
+- **Monitoring** — scheduled domain/IP/URL checks and selected public-content monitors. Local schedules run only while the desktop application is open.
+
+## Social media, Telegram and Tor
+
+The **Social / Telegram / Tor** tab supports narrowly scoped public-source monitoring:
+
+| Source | Supported workflow |
+|---|---|
+| Mastodon | One explicitly supplied public account timeline; non-public statuses are excluded |
+| Bluesky | Search public posts using the public AppView endpoint |
+| RSS / Atom | Public HTTPS feeds, including supported YouTube channel feeds |
+| Telegram | New posts from specified public channels through the official Bot API and a bot added to those channels |
+| Tor onion | One exact v3 onion page through a locally configured Tor SOCKS5H proxy |
+
+Keyword filters, scheduled checks, deduplication and case evidence storage are included. Telegram monitoring does not backfill channel history and requires a dedicated bot token; the Bot API's polling mode cannot be used while a webhook is configured. Tor monitoring fetches one specified page only — it does not crawl onion services, index directories, search marketplaces or download files.
+
+This is not comprehensive coverage of every social platform. X, Instagram, Facebook, private communities and private messages are not supported monitoring sources.
 
 ## Quick start
 
-```bash
+~~~bash
 git clone https://github.com/h84095111-hue/SMART-INTEL.git
 cd SMART-INTEL/desktop
+
 python -m venv .venv
-# Windows: .venv\\Scripts\\Activate.ps1
-# macOS/Linux: source .venv/bin/activate
+# Windows PowerShell:
+# .venv/Scripts/Activate.ps1
+# macOS / Linux:
+# source .venv/bin/activate
+
 python -m pip install -r requirements.txt
 python main.py
-```
+~~~
 
-Run passive collection from the terminal (from the `desktop/` directory):
+Python 3.10+ is recommended. Configure AI and provider credentials from **AI & network settings** in the app. API keys are stored through the operating-system credential store when available. Third-party services may impose usage fees, quotas or licensing requirements.
 
-```bash
-python -m smartintel.cli example.com --output findings.json
-```
+### Optional dependencies
 
-Python 3.10+ is recommended. Configure AI and OSINT provider keys in **AI provider settings**. Third-party API usage may be billed separately.
+Some capabilities require optional packages or separately installed software. See [desktop/README.md](desktop/README.md) for details about Playwright, SQLCipher, image analysis, Tor proxy setup, provider configuration, Telegram setup and local Ollama.
 
 ## Build
 
-- Windows: `build_windows.bat`
-- macOS: `./build_macos.sh`
-- Linux: `./build_linux.sh`
+Build on the target operating system:
 
-Build on the target OS. See [desktop/BUILDING.md](desktop/BUILDING.md). CI runs tests and creates per-platform build artifacts; public signed installers are not yet published.
+- Windows: **build_windows.bat**
+- macOS: **./build_macos.sh**
+- Linux: **./build_linux.sh**
 
-## Capability status
+See [desktop/BUILDING.md](desktop/BUILDING.md). PyInstaller builds should be produced on their target OS; public signed installers are not currently published.
 
-| Area | Status |
-|---|---|
-| CT logs, Wayback, passive DNS and listed threat-intel APIs | Initial passive connectors available; provider keys/quotas apply |
-| WHOIS history, username references, news | Partial; provider-specific history and official source adapters remain |
-| Email/phone and social lookups | Partial; conservative public identifier extraction from collected evidence, not subscriber/account verification |
-| Court, company and sanctions records | Planned; source-specific official adapters needed |
-| Dark web, Telegram and forums | Not implemented; only future lawful public/API integrations |
-| Port/service/tech-stack fingerprinting | **Excluded by design** |
-| Entity graph, correlation and risk scoring | Interactive evidence-to-identifier graph; explainable uncalibrated risk index; no automatic person merging or identity proof |
-| Timeline | Evidence table only |
-| Chain of custody | Hash-linked audit journal integrated for case/evidence additions; verification UI pending |
-| Encryption, signatures, attachments, WARC and screenshots | Helpers only for encryption/signatures/hashing; full evidence vault and capture pipeline pending |
-| Team accounts, roles, shared cases, tasks and comments | Not implemented |
-| Proxy/Tor, scheduling and continuous monitoring | Not implemented |
-| CLI/API, SIEM/SOAR/ticketing | Not implemented |
-| PDF, JSON, CSV, STIX, DOCX, HTML | Export helpers available; app export UI and branded templates pending |
-| Prebuilt releases and signed installers | Not yet published |
+## Responsible use and limitations
 
-See [OSINT capability matrix](docs/osint/CAPABILITY-MATRIX.md) and [source integrations](docs/osint/SOURCES.md).
+Smart Intel is designed for passive public-source research and evidence organization. It does not provide active port scanning, exploitation, login attempts, private-account scraping, challenge bypass or access-control bypass. Shodan and Censys integrations query existing provider observations; they do not initiate scans.
 
-## Responsible use
+The application is still under active development and is not a production-hardened enterprise investigation platform. External providers control their own availability, API access, terms, data coverage and rate limits. Scheduled jobs are local to the running desktop app. Proxy or Tor routing is opt-in and is not an anonymity guarantee. AI summaries and risk scores are leads for analyst review, not verified facts or calibrated probabilities.
 
-Designed for lawful, authorized research of public information. No login bypass, exploitation, active port scanning, private-account scraping or access to non-public systems. Shodan and Censys functions query existing provider observations only; they do not initiate scans. Respect provider terms, rate limits, privacy law and authorization. Do not submit personal identifiers unless you have a lawful basis. AI outputs and reputation scores are triage aids, not verified facts.
-
-Cases are stored locally in `~/.smart-intel/data/`. API keys are stored through the OS credential store when available. Evidence sent to an AI provider is transmitted to that provider's API.
+Use only sources and targets you are authorized to investigate. Respect privacy law, provider terms and rate limits. Do not submit personal information to external services unless you have a lawful basis to do so.
 
 ## Documentation
 
-- [Install and run](docs/INSTALLATION.md)
+- [Desktop app guide and feature details](desktop/README.md)
+- [Installation guide](docs/INSTALLATION.md)
 - [User guide](docs/USAGE.md)
-- [Provider setup](docs/osint/SOURCES.md)
+- [OSINT source integrations](docs/osint/SOURCES.md)
 - [Capability matrix and roadmap](docs/osint/CAPABILITY-MATRIX.md)
 - [Security and evidence handling](docs/osint/SECURITY.md)
 
 ## License
 
 MIT — see [LICENSE](LICENSE).
-
-
-## Graph and identity-analysis safeguards
-
-The desktop graph now debounces text filtering, calculates filters/clusters/layout in a worker thread, and uses a component-aware linear-time layout fallback for graphs above 180 nodes. Smaller graphs use the force-directed layout. Semantic identity hints are captured by the built-in website collector before it reduces HTML to text; the graph also accepts structured semantic identifier records from evidence JSON.
-
-Phone extraction accepts semantic attributes only when their names contain exact tokens such as `telephone`, `phone`, or `tel`, and requires at least eight digits. This is a format filter, not phone-number validation or ownership verification.
-
-False-positive triage is scoped to the selected graph identifier. An unrelated email elsewhere in the same evidence record cannot lower the selected username or phone node's risk. Evidence age uses a rolling 365-day window. Distinct source labels are not assumed to be independent sources, and the index remains an uncalibrated heuristic.
-
-Email, phone, and profile-metadata identity-check observations are now saved to the active case as evidence, in addition to Maigret candidate-profile findings. These checks still do not establish mailbox existence, phone subscriber identity, or account ownership.
-
-## Remaining work
-
-The workflow engine, adapter manager and source catalogue still need app integration. Screenshots/WARC capture, encrypted case storage, opt-in proxy/Tor routing, real account discovery and authorized breach/corporate/court-data integrations, graph editing/export, timeline filters, multi-user roles, scheduling, SIEM integration, signed releases and UI automation remain planned or incomplete. Do not treat the application as a finished or production-hardened investigation platform.
