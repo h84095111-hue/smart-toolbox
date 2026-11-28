@@ -11,12 +11,23 @@ def _rdap(url):
     r=requests.get(url,headers=HEADERS,timeout=REQUEST_TIMEOUT,allow_redirects=True)
     r.raise_for_status(); return r.json(),r.url
 
+def _resolve_public_addresses(host, port):
+    """Resolve once and reject the answer set if any address is non-public."""
+    answers = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    addresses = sorted({answer[4][0] for answer in answers})
+    if not addresses:
+        raise ValueError("Host did not resolve.")
+    if any(not ipaddress.ip_address(address).is_global for address in addresses):
+        raise ValueError("Only publicly routable website hosts are supported.")
+    return addresses
+
+
 def collect_domain(domain):
     domain=domain.strip().lower().rstrip('.')
     if not domain or '/' in domain or ' ' in domain: raise ValueError('Enter a domain name only, e.g. example.com')
-    out=[]
+    out=[]; ips=[]
     try:
-        ips=sorted({x[4][0] for x in socket.getaddrinfo(domain,None)})
+        ips=_resolve_public_addresses(domain,443)
         out.append(Finding('DNS address records',', '.join(ips),'System DNS',confidence='High'))
     except Exception as e: out.append(Finding('DNS lookup',str(e),'System DNS',confidence='Low'))
     try:
@@ -26,7 +37,8 @@ def collect_domain(domain):
     except Exception as e: out.append(Finding('RDAP lookup',str(e),'ICANN RDAP',confidence='Low'))
     try:
         ctx=ssl.create_default_context()
-        with socket.create_connection((domain,443),timeout=REQUEST_TIMEOUT) as sock:
+        if not ips: raise ValueError("No validated public DNS address is available for TLS.")
+        with socket.create_connection((ips[0],443),timeout=REQUEST_TIMEOUT) as sock:
             with ctx.wrap_socket(sock,server_hostname=domain) as ss:
                 cert=ss.getpeercert(); info={'subject':cert.get('subject'),'issuer':cert.get('issuer'),'notBefore':cert.get('notBefore'),'notAfter':cert.get('notAfter'),'protocol':ss.version(),'cipher':ss.cipher()}
         out.append(Finding('TLS certificate metadata',json.dumps(info,indent=2),'TLS handshake','https://'+domain,'High'))
@@ -87,14 +99,9 @@ def _get_public_pinned(url):
     parsed = urlparse(url)
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
     try:
-        answers = socket.getaddrinfo(parsed.hostname, port, type=socket.SOCK_STREAM)
-    except socket.gaierror as exc:
-        raise ValueError(f"Could not resolve public host: {exc}") from exc
-    addresses = sorted({answer[4][0] for answer in answers})
-    if not addresses:
-        raise ValueError("Host did not resolve.")
-    if any(not ipaddress.ip_address(address).is_global for address in addresses):
-        raise ValueError("Only publicly routable website hosts are supported.")
+        addresses = _resolve_public_addresses(parsed.hostname, port)
+    except (socket.gaierror, ValueError) as exc:
+        raise ValueError(f"Could not resolve a public host: {exc}") from exc
     pinned_ip = addresses[0]
     headers = {**HEADERS, "Host": parsed.hostname}
     path = parsed.path or "/"
