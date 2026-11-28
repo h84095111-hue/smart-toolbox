@@ -37,6 +37,12 @@ python -m pip install -r requirements.txt
 python main.py
 ```
 
+Run passive collection from the terminal (from the `desktop/` directory):
+
+```bash
+python -m smartintel.cli example.com --output findings.json
+```
+
 Python 3.10+ is recommended. Configure AI and OSINT provider keys in **AI provider settings**. Third-party API usage may be billed separately.
 
 ## Build
