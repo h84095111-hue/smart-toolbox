@@ -61,3 +61,9 @@ See [BUILDING.md](BUILDING.md). Build separately on each target OS; PyInstaller 
 - Important boundary: this is application-level encryption for evidence payloads and attachments, not full SQLite database encryption. Case names and metadata remain plaintext. A local hash chain detects accidental or partial edits but cannot stop an attacker with filesystem/database access from rewriting the entire chain. Use independently held signing keys and external timestamp/immutable storage for that threat model.
 - Losing the OS credential-store key makes encrypted evidence unrecoverable; the UI refuses to silently replace a missing key.
 
+
+- Maigret and email/phone/profile-URL identity checks now execute as explicit workflow jobs. Maigret is treated as an active multi-site operation and only runs after the analyst clicks the identity-check action; it has a 55-second subprocess deadline inside a 60-second workflow deadline.
+- Adapter health counters and per-host source rate limiting are protected against concurrent collector threads.
+- Pinned public website fetching retries every validated public IP address before failing; it preserves the original Host header and TLS SNI.
+- Profile metadata fetches use the same pinned public fetcher rather than performing an independent DNS check followed by an unpinned HTTP request.
+
