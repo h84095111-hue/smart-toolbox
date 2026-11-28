@@ -63,7 +63,7 @@ def build_registry(*, misp_url: str = "", adapter_manager: AdapterManager | None
     add("abuseipdb", src.abuseipdb_ip, target_types=("ip",))
     add("shodan", src.shodan_host, target_types=("ip",))
     add("censys", src.censys_host, target_types=("ip",))
-    add("maigret", src.public_username_reference, target_types=("username",))
+    add("public_username_reference", src.public_username_reference, target_types=("username",))
 
     registry.register(CollectorSpec(
         name="domain_rdap_dns_tls",
