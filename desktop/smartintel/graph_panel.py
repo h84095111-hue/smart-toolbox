@@ -1,23 +1,35 @@
-"""Interactive evidence graph with filtering, connected-component clusters and force layout."""
+"""Responsive evidence graph panel; expensive graph calculations run off the UI thread."""
 from __future__ import annotations
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
-from PyQt6.QtGui import QBrush, QPen, QColor, QFont
+from PyQt6.QtCore import Qt,QThread,pyqtSignal,QTimer
+from PyQt6.QtGui import QBrush,QPen,QColor,QFont
 from PyQt6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QLabel,QPushButton,QComboBox,
     QLineEdit,QGraphicsView,QGraphicsScene,QGraphicsEllipseItem,QGraphicsSimpleTextItem,
     QGraphicsLineItem,QTextBrowser,QSplitter,QMessageBox)
-from .identity_graph import build_identity_graph, validate_graph
-from .graph_algorithms import connected_components, filter_graph, force_layout
+from .identity_graph import build_identity_graph,validate_graph
+from .graph_algorithms import connected_components,filter_graph,force_layout
 from .match_scoring import assess_evidence_risk
 from .ai_analysis import analyze_evidence
 
 class _GraphView(QGraphicsView):
-    """Mouse-wheel zoom and hand-drag navigation."""
     def __init__(self,scene,parent=None):
-        super().__init__(scene,parent)
-        self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+        super().__init__(scene,parent); self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
     def wheelEvent(self,event):
-        self.scale(1.18 if event.angleDelta().y()>0 else 1/1.18,1.18 if event.angleDelta().y()>0 else 1/1.18)
+        factor=1.18 if event.angleDelta().y()>0 else 1/1.18
+        self.scale(factor,factor)
+
+class _GraphRenderTask(QThread):
+    ready=pyqtSignal(int,object); failed=pyqtSignal(int,str)
+    def __init__(self,token,graph,kind,relation,query):
+        super().__init__(); self.token=token; self.graph=graph
+        self.kind=kind; self.relation=relation; self.query=query
+    def run(self):
+        try:
+            nodes,edges=filter_graph(self.graph,self.kind,self.relation,self.query)
+            clusters=connected_components(nodes,edges)
+            positions=force_layout(nodes,edges)
+            self.ready.emit(self.token,(nodes,edges,clusters,positions))
+        except Exception as exc:self.failed.emit(self.token,str(exc))
 
 class _AnalystTask(QThread):
     done=pyqtSignal(str); failed=pyqtSignal(str)
@@ -34,7 +46,7 @@ class _NodeItem(QGraphicsEllipseItem):
         self.setBrush(QBrush(QColor(palette[cluster%len(palette)])))
         self.setPen(QPen(QColor("#d4def0"),1.5)); self.setPos(x,y); self.setZValue(2)
         self.setToolTip(f"Cluster {cluster+1} · {node.kind} · {node.label}")
-        label=QGraphicsSimpleTextItem(node.label[:20],self); label.setBrush(QBrush(QColor("#ffffff")))
+        label=QGraphicsSimpleTextItem(node.label[:20],self); label.setBrush(QBrush(QColor("#fff")))
         label.setFont(QFont("Segoe UI",8)); rect=label.boundingRect(); label.setPos(-rect.width()/2,-rect.height()/2)
     def mousePressEvent(self,event):
         self.callback(self.node); super().mousePressEvent(event)
@@ -42,23 +54,23 @@ class _NodeItem(QGraphicsEllipseItem):
 class IdentityGraphPanel(QWidget):
     def __init__(self,store,parent=None):
         super().__init__(parent); self.store=store; self.case_id=None; self.graph=None
-        self.evidence=[]; self.task=None; self.selected=None
+        self.evidence=[]; self.task=None; self.selected=None; self._render_token=0; self._render_tasks=set()
         root=QVBoxLayout(self); root.setContentsMargins(8,8,8,8)
         header=QHBoxLayout(); title=QLabel("Evidence relationship graph")
         title.setStyleSheet("font-size:19px;font-weight:800"); header.addWidget(title); header.addStretch()
-        self.refresh_btn=QPushButton("Refresh graph"); self.refresh_btn.clicked.connect(self.refresh); header.addWidget(self.refresh_btn)
-        root.addLayout(header)
-        note=QLabel("Force-directed layout · connected-component clusters · filter by identifier and relationship. Lines show co-observation, not proof of identity.")
+        self.refresh_btn=QPushButton("Refresh graph"); self.refresh_btn.clicked.connect(self.refresh); header.addWidget(self.refresh_btn); root.addLayout(header)
+        note=QLabel("Clustered force-directed layout · filters run asynchronously. Links show observations, not proof of identity.")
         note.setWordWrap(True); note.setStyleSheet("color:#91a2bd"); root.addWidget(note)
         filters=QHBoxLayout()
         self.kind_filter=QComboBox(); self.kind_filter.addItems(["All types","source","email","phone","username","profile_or_url"])
         self.edge_filter=QComboBox(); self.edge_filter.addItems(["All relationships","observed_in","co_observed"])
         self.search_filter=QLineEdit(); self.search_filter.setPlaceholderText("Filter labels…")
-        for control in (self.kind_filter,self.edge_filter,self.search_filter): filters.addWidget(control)
-        self.kind_filter.currentTextChanged.connect(self.render_graph)
-        self.edge_filter.currentTextChanged.connect(self.render_graph)
-        self.search_filter.textChanged.connect(self.render_graph)
+        for control in (self.kind_filter,self.edge_filter,self.search_filter):filters.addWidget(control)
+        self.kind_filter.currentTextChanged.connect(self.schedule_render)
+        self.edge_filter.currentTextChanged.connect(self.schedule_render)
+        self.search_filter.textChanged.connect(self.schedule_render)
         root.addLayout(filters)
+        self.debounce=QTimer(self); self.debounce.setSingleShot(True); self.debounce.setInterval(250); self.debounce.timeout.connect(self.render_graph)
         split=QSplitter(Qt.Orientation.Horizontal); self.scene=QGraphicsScene(self); self.view=_GraphView(self.scene)
         self.view.setMinimumHeight(360); self.view.setStyleSheet("background:#091323;border:1px solid #263650;border-radius:8px")
         split.addWidget(self.view)
@@ -76,15 +88,23 @@ class IdentityGraphPanel(QWidget):
         if not self.case_id:return
         self.evidence=self.store.evidence(self.case_id)
         self.graph=build_identity_graph(self.evidence); validate_graph(self.graph)
-        self.render_graph()
-    def render_graph(self,*_):
-        self.scene.clear(); self.selected=None
+        self.schedule_render()
+    def schedule_render(self,*_):
+        if self.graph:self.debounce.start()
+    def render_graph(self):
         if not self.graph:return
-        nodes,edges=filter_graph(self.graph,self.kind_filter.currentText(),self.edge_filter.currentText(),self.search_filter.text())
+        self._render_token+=1; token=self._render_token
+        task=_GraphRenderTask(token,self.graph,self.kind_filter.currentText(),self.edge_filter.currentText(),self.search_filter.text())
+        self._render_tasks.add(task)
+        task.ready.connect(self._render_ready); task.failed.connect(self._render_failed)
+        task.finished.connect(lambda t=task:self._render_tasks.discard(t))
+        self.status.setText("Calculating graph layout…"); task.start()
+    def _render_ready(self,token,result):
+        if token!=self._render_token:return
+        nodes,edges,clusters,positions=result; self.scene.clear(); self.selected=None
         if not nodes:
             self.detail.setPlainText("No graph nodes match the current filters.")
             self.risk.setText("False-positive risk index: —"); self.status.setText("No matching nodes."); return
-        clusters=connected_components(nodes,edges); positions=force_layout(nodes,edges)
         for edge in edges:
             x1,y1=positions[edge.source]; x2,y2=positions[edge.target]
             line=QGraphicsLineItem(x1,y1,x2,y2)
@@ -95,19 +115,19 @@ class IdentityGraphPanel(QWidget):
             x,y=positions[node.id]; self.scene.addItem(_NodeItem(node,x,y,clusters[node.id],self.select_node))
         rect=self.scene.itemsBoundingRect().adjusted(-90,-90,90,90); self.scene.setSceneRect(rect)
         self.view.fitInView(rect,Qt.AspectRatioMode.KeepAspectRatio)
-        cluster_count=len(set(clusters.values()))
-        self.status.setText(f"{len(nodes)} visible nodes · {len(edges)} visible links · {cluster_count} clusters · {len(self.evidence)} evidence records")
-        self.detail.setPlainText("Click a node to inspect its supporting evidence. Cluster colours represent graph connectivity only.")
+        self.status.setText(f"{len(nodes)} nodes · {len(edges)} links · {len(set(clusters.values()))} clusters · {len(self.evidence)} evidence records")
+        self.detail.setPlainText("Click a node to inspect its supporting evidence. Cluster colours show connectivity only.")
+    def _render_failed(self,token,error):
+        if token==self._render_token:self.status.setText("Graph layout failed: "+error)
     def select_node(self,node):
         self.selected=node; related=[e for e in self.evidence if e.id in node.evidence_ids]
-        risk=assess_evidence_risk(related)
+        risk=assess_evidence_risk(related,subject=node)
         self.risk.setText(f"Selected-node evidence risk: {risk.score}/100 ({risk.risk_band.upper()})\nUncalibrated heuristic — not a probability or identity confidence.")
         sources={e.source for e in related}
         lines=[f"{node.kind.upper()}: {node.label}",f"Supporting evidence records: {len(related)}",
-               f"Distinct source labels: {len(sources)} (independence not assumed)",""]
+               f"Distinct source labels: {len(sources)} (not assumed independent)",""]
         for item in related:
-            lines.extend([f"• {item.title}",f"  Source: {item.source}",f"  Evidence ID: {item.id}",
-                          f"  URL: {item.url or 'Not supplied'}",""])
+            lines.extend([f"• {item.title}",f"  Source: {item.source}",f"  Evidence ID: {item.id}",f"  URL: {item.url or 'Not supplied'}",""])
         self.detail.setPlainText("\n".join(lines))
     def run_analysis(self):
         if not self.graph or not self.evidence:
