@@ -17,7 +17,7 @@ class Store:
         self._init()
 
     def connect(self):
-        if database_encryption.database_encryption_enabled():
+        if database_encryption.database_encryption_enabled(self.path):
             db = database_encryption.encrypted_connect(self.path)
         else:
             db = sqlite3.connect(self.path, timeout=30)
