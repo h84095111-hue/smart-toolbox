@@ -138,3 +138,48 @@ def validate_graph(graph: IdentityGraph)->None:
     for edge in graph.edges:
         if edge.source not in ids or edge.target not in ids:raise ValueError("Graph edge references an unknown node")
         if not edge.evidence_ids:raise ValueError("Every graph edge must cite evidence")
+
+
+def apply_graph_aliases(graph: IdentityGraph, aliases: list[dict[str, Any]]) -> IdentityGraph:
+    """Apply only explicit analyst-approved alias decisions to a case graph."""
+    redirect = {str(row["alias_node_id"]): str(row["canonical_node_id"]) for row in aliases}
+
+    def resolve(node_id: str) -> str:
+        seen = set()
+        current = node_id
+        while current in redirect:
+            if current in seen:
+                raise ValueError("Graph alias cycle detected; remove a conflicting merge before rendering.")
+            seen.add(current)
+            current = redirect[current]
+        return current
+
+    merged_nodes: dict[str, GraphNode] = {}
+    for node in graph.nodes:
+        canonical = resolve(node.id)
+        existing = merged_nodes.get(canonical)
+        if existing is None:
+            merged_nodes[canonical] = GraphNode(canonical, node.kind, node.label, list(node.evidence_ids))
+        else:
+            existing.evidence_ids = sorted(set(existing.evidence_ids).union(node.evidence_ids))
+
+    merged_edges: dict[tuple[str, str, str], GraphEdge] = {}
+    for edge in graph.edges:
+        source, target = resolve(edge.source), resolve(edge.target)
+        if source == target:
+            continue
+        if edge.relation == "observed_in":
+            key = (source, target, edge.relation)
+        else:
+            key = (*sorted((source, target)), edge.relation)
+        existing = merged_edges.get(key)
+        if existing is None:
+            merged_edges[key] = GraphEdge(source, target, edge.relation, list(edge.evidence_ids),
+                                          edge.rationale, edge.confidence)
+        else:
+            existing.evidence_ids = sorted(set(existing.evidence_ids).union(edge.evidence_ids))
+            if edge.rationale and edge.rationale not in existing.rationale:
+                existing.rationale = (existing.rationale + " | " + edge.rationale)[:1000]
+    result = IdentityGraph(list(merged_nodes.values()), list(merged_edges.values()), graph.generated_at)
+    validate_graph(result)
+    return result
