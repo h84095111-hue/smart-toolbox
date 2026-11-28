@@ -1,11 +1,12 @@
 """Responsive evidence graph panel; expensive graph calculations run off the UI thread."""
 from __future__ import annotations
+import json
 from PyQt6.QtCore import Qt,QThread,pyqtSignal,QTimer
 from PyQt6.QtGui import QBrush,QPen,QColor,QFont
 from PyQt6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QLabel,QPushButton,QComboBox,
     QLineEdit,QGraphicsView,QGraphicsScene,QGraphicsEllipseItem,QGraphicsSimpleTextItem,
-    QGraphicsLineItem,QTextBrowser,QSplitter,QMessageBox)
-from .identity_graph import build_identity_graph,validate_graph
+    QGraphicsLineItem,QTextBrowser,QSplitter,QMessageBox,QFileDialog)
+from .identity_graph import build_identity_graph,validate_graph,IdentityGraph
 from .graph_algorithms import connected_components,filter_graph,force_layout
 from .match_scoring import assess_evidence_risk
 from .ai_analysis import analyze_evidence
@@ -58,7 +59,8 @@ class IdentityGraphPanel(QWidget):
         root=QVBoxLayout(self); root.setContentsMargins(8,8,8,8)
         header=QHBoxLayout(); title=QLabel("Evidence relationship graph")
         title.setStyleSheet("font-size:19px;font-weight:800"); header.addWidget(title); header.addStretch()
-        self.refresh_btn=QPushButton("Refresh graph"); self.refresh_btn.clicked.connect(self.refresh); header.addWidget(self.refresh_btn); root.addLayout(header)
+        self.refresh_btn=QPushButton("Refresh graph"); self.refresh_btn.clicked.connect(self.refresh); header.addWidget(self.refresh_btn)
+        self.export_btn=QPushButton("Export visible graph JSON"); self.export_btn.clicked.connect(self.export_graph); header.addWidget(self.export_btn); root.addLayout(header)
         note=QLabel("Clustered force-directed layout · filters run asynchronously. Links show observations, not proof of identity.")
         note.setWordWrap(True); note.setStyleSheet("color:#91a2bd"); root.addWidget(note)
         filters=QHBoxLayout()
@@ -119,6 +121,17 @@ class IdentityGraphPanel(QWidget):
         self.detail.setPlainText("Click a node to inspect its supporting evidence. Cluster colours show connectivity only.")
     def _render_failed(self,token,error):
         if token==self._render_token:self.status.setText("Graph layout failed: "+error)
+    def export_graph(self):
+        if not self.graph:
+            QMessageBox.information(self,"No graph","Build a graph before exporting."); return
+        nodes,edges=filter_graph(self.graph,self.kind_filter.currentText(),self.edge_filter.currentText(),self.search_filter.text())
+        visible=IdentityGraph(nodes,edges,self.graph.generated_at)
+        path,_=QFileDialog.getSaveFileName(self,"Export visible graph","smart-intel-graph.json","JSON (*.json)")
+        if not path:return
+        try:
+            with open(path,"w",encoding="utf-8") as handle:handle.write(visible.to_json())
+            self.status.setText(f"Exported {len(nodes)} nodes and {len(edges)} edges.")
+        except OSError as exc:QMessageBox.warning(self,"Graph export failed",str(exc))
     def select_node(self,node):
         self.selected=node; related=[e for e in self.evidence if e.id in node.evidence_ids]
         risk=assess_evidence_risk(related,subject=node)
