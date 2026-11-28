@@ -13,3 +13,4 @@ phonenumbers>=8.13,<10
 dnspython>=2.6,<3
 cloudpickle>=3,<4
 PySocks>=1.7.1,<2
+defusedxml>=0.7.1,<0.8
