@@ -17,12 +17,12 @@ Status reflects code in the current repository, not a marketing checklist.
 | Dark web / Telegram / forums | Not implemented | Future lawful public/API feeds only |
 | Wayback | Initial connector | CDX public endpoint |
 | Port/service/tech-stack fingerprinting | **Excluded by design** | No active scanning or fingerprinting |
-| Entity relationship graph | Partial | Entity extraction helper; interactive graph UI pending |
+| Entity relationship graph | Initial UI | Interactive per-case graph links extracted public identifiers to source evidence; no automatic person merging or identity proof |
 | Timeline | Implemented as table | No chart/timeline visualization |
-| Correlation/deduplication | Partial | Exact content fingerprint dedup helper |
-| Risk/reputation scoring | Partial | Transparent heuristic helper, not calibrated |
+| Correlation/deduplication | Partial | Evidence-linked identifier extraction; exact content fingerprint dedup helper; relationship correlation remains conservative |
+| Risk/reputation scoring | Initial UI | Explainable 0–100 false-positive triage index; explicitly uncalibrated, not a probability |
 | Source credibility | Partial | Source-type heuristic only |
-| Local/offline AI | Planned | Current AI providers are remote APIs |
+| Local/offline AI | Initial integration | Optional Ollama analysis of graph/evidence; cloud providers remain optional |
 | Chain of custody/audit | Partial | Hash-linked JSONL journal with a verification action; local file access can still permit full rewrite and re-hash |
 | Tamper-evident hashes/signatures | Partial | SHA-256 and hash-chain checks; signing helper is not yet a trusted signing workflow or externally anchored checkpoint |
 | Screenshots / WARC | Not implemented | Capture pipeline pending |
@@ -47,7 +47,7 @@ Status reflects code in the current repository, not a marketing checklist.
 
 1. Stabilize source adapters and broaden offline/unit tests.
 2. Complete evidence vault: attachments, WARC, screenshot capture, encrypted DB and audit verification/signatures.
-3. Build graph UI, source correlation, timeline table filters and explainable risk scoring.
+3. Expand graph extraction/correlation, add timeline filters and validate risk scoring with a representative labeled dataset.
 4. Add official company/sanctions/court adapters and authorized breach notifications.
 5. Add PDF/report templates and typed STIX IOC objects.
 6. Add local AI, scheduled jobs, CLI/API and SIEM/ticketing integrations.
