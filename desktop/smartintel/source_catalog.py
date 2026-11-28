@@ -175,18 +175,17 @@ class AdapterManager:
 
     def health_report(self) -> dict[str, dict[str, Any]]:
         with self._lock:
-            snapshot = list(self.health.items())
-        return {
-            source_id: {
-                "failures": state.failures,
-                "successes": state.successes,
-                "circuit_open": state.circuit_open_until > self.clock(),
-                "last_error": state.last_error,
-                "last_success_at": state.last_success_at,
-                "schema_drift": state.schema_drift,
+            return {
+                source_id: {
+                    "failures": state.failures,
+                    "successes": state.successes,
+                    "circuit_open": state.circuit_open_until > self.clock(),
+                    "last_error": state.last_error,
+                    "last_success_at": state.last_success_at,
+                    "schema_drift": state.schema_drift,
+                }
+                for source_id, state in self.health.items()
             }
-            for source_id, state in snapshot
-        }
 
 
 def schema_fingerprint(value: Any) -> str:
