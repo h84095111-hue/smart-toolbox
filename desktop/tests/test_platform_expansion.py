@@ -188,6 +188,7 @@ def test_opensanctions_uses_query_by_example_matching_api(monkeypatch):
     assert captured["params"]["topics"] == ["sanction", "sanction.linked", "debarment"]
     import json
     content = json.loads(result["content"])
-    assert content["candidate_count"] == 1
+    assert content["query_status"] == 200
+    assert len(content["results"]) == 1
     assert content["results"][0]["score"] == 0.82
     assert "not a legal determination" in content["warning"]
