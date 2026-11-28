@@ -124,5 +124,5 @@ def opensanctions_search(query: str, *, dataset: str = "default", schema: str = 
          "query_status": query_result.get("status"),
          "candidate_count": query_result.get("total", len(matches)),
          "results": matches,
-         "warning": "A name-only match may produce false positives, especially for common names. Compare date of birth, nationality, identifiers, jurisdiction, designation authority and primary sources. Do not take adverse action from this result alone."},
+         "warning": "This is a candidate match, not a legal determination. A name-only match may produce false positives, especially for common names. Compare date of birth, nationality, identifiers, jurisdiction, designation authority and primary sources. Do not take adverse action from this result alone."},
         "OpenSanctions Matching API", url, "Low")
