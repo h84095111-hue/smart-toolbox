@@ -13,7 +13,7 @@ import re
 import socket
 import ssl
 import http.client
-from urllib.parse import urlparse, unquote
+from urllib.parse import urlparse, unquote, parse_qsl
 
 
 def _local_tor_proxy():
@@ -34,6 +34,14 @@ def _local_tor_proxy():
     return parsed
 
 
+def _reject_secret_query(parsed) -> None:
+    sensitive = {"access_token", "auth", "authorization", "api_key", "apikey", "key",
+                 "password", "passwd", "secret", "session", "signature", "token"}
+    for key, _value in parse_qsl(parsed.query, keep_blank_values=True):
+        lowered = key.casefold()
+        if lowered in sensitive or lowered.endswith("_token") or lowered.endswith("_secret"):
+            raise ValueError("Onion monitor URLs must not embed authentication tokens, API keys or session secrets.")
+
 def fetch_onion_page(url: str) -> dict:
     parsed = urlparse((url or "").strip())
     if parsed.scheme not in {"http", "https"} or not parsed.hostname or not parsed.hostname.endswith(".onion"):
@@ -43,6 +51,7 @@ def fetch_onion_page(url: str) -> dict:
         raise ValueError("Only modern v3 .onion hostnames (56 base32 characters) are supported.")
     if parsed.username or parsed.password or parsed.port not in {None, 80, 443}:
         raise ValueError("Onion monitoring rejects embedded credentials and non-standard ports.")
+    _reject_secret_query(parsed)
     proxy = _local_tor_proxy()
     try:
         import socks
