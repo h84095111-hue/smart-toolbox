@@ -67,3 +67,28 @@ def test_missing_key_does_not_overwrite_existing_vault(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError, match="Refusing to generate a replacement key"):
         store.enable_evidence_encryption()
     assert called == []
+
+
+def test_attachment_vault_round_trip_and_hash_verification(tmp_path, monkeypatch):
+    from smartintel import secure_vault
+    source = tmp_path / "screen.png"
+    source.write_bytes(b"fake-png-bytes")
+    monkeypatch.setattr(secure_vault, "encrypt", lambda data: b"cipher:" + data)
+    monkeypatch.setattr(secure_vault, "decrypt", lambda data: data.removeprefix(b"cipher:"))
+    row = secure_vault.import_attachment(tmp_path / "vault-root", "case-1", source, kind="screenshot")
+    assert row["kind"] == "screenshot"
+    assert secure_vault.read_attachment(row) == b"fake-png-bytes"
+    Path(row["path"]).write_bytes(b"tampered")
+    import pytest
+    with pytest.raises(ValueError, match="ciphertext hash mismatch"):
+        secure_vault.read_attachment(row)
+
+
+def test_local_file_can_be_wrapped_as_warc_resource(tmp_path):
+    from smartintel.secure_vault import make_warc_record
+    source = tmp_path / "capture.txt"
+    source.write_text("captured evidence", encoding="utf-8")
+    record = make_warc_record(source)
+    assert record.startswith(b"WARC/1.1\\r\\n")
+    assert b"WARC-Type: resource" in record
+    assert b"captured evidence" in record
