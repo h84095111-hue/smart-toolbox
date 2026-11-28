@@ -136,6 +136,7 @@ def check_username(
             "--top-sites", str(int(max_sites)),
             "--timeout", str(int(timeout_per_site)),
             "--retries", "1",
+            "--max-connections", "25",
             "--no-recursion",
             "--no-autoupdate",
         ]
