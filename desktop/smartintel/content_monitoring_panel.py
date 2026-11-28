@@ -239,18 +239,20 @@ class ContentMonitoringPanel(QWidget):
     def run_due(self):
         if self.worker and self.worker.isRunning():
             return
-        if not self._can_write():
+        if not self.user or self.user.get("role") not in {"admin", "analyst"}:
             return
-        due = [item for item in self.store.due_content_monitors()
-               if item["case_id"] == self.case_id]
+        due = self.store.due_content_monitors()
+        due = [item for item in due
+               if (self.user.get("role") == "admin" or
+                   self.store.user_case_role(item["case_id"], self.user) in {"owner", "analyst"})]
         if due:
             self._start_monitor(due[0])
 
     def _start_monitor(self, monitor):
         if self.worker and self.worker.isRunning():
             return
-        if not self._can_write():
-            QMessageBox.warning(self, "Read-only access", "Only case owners and analysts can run monitors.")
+        if not self.user or self.user.get("role") not in {"admin", "analyst"}:
+            QMessageBox.warning(self, "Read-only access", "Only an analyst or administrator can run monitors.")
             return
         role = self.store.user_case_role(monitor["case_id"], self.user)
         if role not in {"owner", "analyst"} and self.user.get("role") != "admin":
