@@ -105,6 +105,8 @@ def make_warc_response(url: str) -> bytes:
     parsed = urlparse(url if "://" in url else "https://" + url)
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         raise ValueError("Enter a valid HTTP or HTTPS URL.")
+    if parsed.username or parsed.password or parsed.port not in {None, 80, 443}:
+        raise ValueError("WARC capture accepts only standard public HTTP(S) URLs without embedded credentials.")
     response = _get_public_pinned(parsed.geturl())
     reason = str(response.reason or "OK")
     status_line = f"HTTP/1.1 {response.status_code} {reason}\r\n"
