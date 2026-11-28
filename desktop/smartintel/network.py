@@ -88,6 +88,8 @@ def open_pinned_socket(target_ip: str, target_port: int, *, server_hostname: str
             sock.connect((str(address), int(target_port)))
         else:
             sock = socket.create_connection((proxy_host, proxy_port), timeout=timeout)
+            if parsed.scheme == "https":
+                sock = ssl.create_default_context().wrap_socket(sock, server_hostname=proxy_host)
             destination = f"[{address}]:{target_port}" if address.version == 6 else f"{address}:{target_port}"
             auth = ""
             if parsed.username is not None:
