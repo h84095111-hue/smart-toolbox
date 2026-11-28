@@ -1,60 +1,65 @@
-"""Transparent triage scoring; not a calibrated statistical probability."""
+"""Transparent evidence-scoped triage; never a calibrated identity probability."""
 from __future__ import annotations
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass,asdict
+from datetime import datetime,timezone
 from typing import Any
 import re
 from urllib.parse import urlparse
 
 @dataclass
 class RiskAssessment:
-    score: int
-    risk_band: str
-    label: str
-    factors: list[dict]
-    calibration: str = "uncalibrated_heuristic"
-    disclaimer: str = "Heuristic triage index, not a statistically calibrated false-positive probability."
-    def to_dict(self): return asdict(self)
+    score:int
+    risk_band:str
+    label:str
+    factors:list[dict]
+    calibration:str="uncalibrated_heuristic"
+    disclaimer:str="Heuristic triage index, not a statistically calibrated false-positive probability."
+    def to_dict(self):return asdict(self)
 
-def assess_false_positive_risk(*, exact_email: bool=False, exact_phone: bool=False,
-    cross_linked_profile: bool=False, independent_sources: int=0,
-    contradictions: int=0, popular_handle: bool=False,
-    display_name_only: bool=False, stale_sources: int=0) -> RiskAssessment:
-    """Return a 0-100 caution index; higher means greater false-match concern."""
-    score=55
-    factors=[]
+def assess_false_positive_risk(*,exact_email=False,exact_phone=False,cross_linked_profile=False,
+    independent_sources=0,contradictions=0,popular_handle=False,display_name_only=False,stale_sources=0):
+    score=55; factors=[]
     def apply(name,delta,reason):
         nonlocal score
-        score+=delta
-        factors.append({"factor":name,"impact":delta,"reason":reason})
-    if exact_email: apply("exact_email",-28,"Exact email string is stronger evidence; mailbox ownership is not verified.")
-    if exact_phone: apply("exact_phone",-18,"Exact normalized phone string is stronger evidence; subscriber ownership is not verified.")
-    if cross_linked_profile: apply("cross_linked_profile",-22,"A public profile explicitly links to another identifier.")
-    if independent_sources: apply("independent_sources",-min(18,6*min(independent_sources,3)),f"{independent_sources} independent source(s) corroborate the lead.")
-    if contradictions: apply("contradictions",min(35,15*contradictions),"Conflicting attributes increase false-match concern.")
-    if popular_handle: apply("popular_handle",15,"Common handles are weak identifiers.")
-    if display_name_only: apply("display_name_only",22,"Display-name similarity alone is not identity evidence.")
-    if stale_sources: apply("stale_sources",min(15,5*stale_sources),"Older evidence may no longer describe the same account.")
-    score=max(5,min(100,score))
-    band="low" if score<30 else "moderate" if score<60 else "high"
+        score+=delta; factors.append({"factor":name,"impact":delta,"reason":reason})
+    if exact_email:apply("exact_email",-28,"The selected email identifier is present in the supporting evidence; mailbox ownership remains unverified.")
+    if exact_phone:apply("exact_phone",-18,"The selected phone identifier is present in the supporting evidence; subscriber ownership remains unverified.")
+    if cross_linked_profile:apply("cross_linked_profile",-18,"The selected identifier is explicitly linked by a public profile attribute.")
+    # Distinct source labels are not proof of source independence; do not award a bonus for them.
+    if contradictions:apply("contradictions",min(35,15*contradictions),"Conflicting attributes increase false-match concern.")
+    if popular_handle:apply("popular_handle",15,"Common handles are weak identifiers.")
+    if display_name_only:apply("display_name_only",22,"Display-name similarity alone is not identity evidence.")
+    if stale_sources:apply("stale_sources",min(20,5*stale_sources),"Evidence older than the rolling recency window may no longer describe the same account.")
+    score=max(5,min(100,score)); band="low" if score<30 else "moderate" if score<60 else "high"
     return RiskAssessment(score,band,"Higher score means higher false-positive concern",factors)
 
-def assess_evidence_risk(evidence: list[Any]) -> RiskAssessment:
-    """Derive transparent triage factors from actual case evidence records."""
+def assess_evidence_risk(evidence:list[Any],subject:Any=None)->RiskAssessment:
+    """Only award identifier support when the selected node's exact value occurs in its evidence."""
     rows=list(evidence or [])
-    combined="\n".join(" ".join(str(getattr(x,k,"") or "") for k in ("title","url","content")) for x in rows)
-    email=bool(re.search(r"(?<![\w.+-])[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}(?![\w.-])",combined))
-    phone=bool(re.search(r"(?<!\w)\+\d[\d\s().-]{7,}\d(?!\w)",combined))
-    explicit_links=any("rel=me" in str(getattr(x,"content","")).lower() or "links to" in str(getattr(x,"content","")).lower() for x in rows)
-    sources={str(getattr(x,"source","")).strip().casefold() for x in rows if str(getattr(x,"source","")).strip()}
-    sources.discard("")
-    names=[str(getattr(x,"title","")).casefold().strip() for x in rows if getattr(x,"title",None)]
-    contradictions=1 if len(set(names))>1 and any(term in combined.casefold() for term in ("conflict","contradict","different owner","not the same")) else 0
-    stale=sum(1 for x in rows if str(getattr(x,"observed_at","")).startswith(("2018","2019","2020","2021")))
-    return assess_false_positive_risk(exact_email=email,exact_phone=phone,
-        cross_linked_profile=explicit_links,independent_sources=max(0,len(sources)-1),
-        contradictions=contradictions,display_name_only=bool(names) and not (email or phone or explicit_links),
-        stale_sources=stale)
-
-def calibration_status(labeled_examples: int) -> str:
-    if labeled_examples < 100: return "uncalibrated: at least 100 labeled examples required before calibration is considered"
-    return "calibration_candidate: validate with held-out data and report calibration metrics before showing probability"
+    text="\n".join(" ".join(str(getattr(row,key,"") or "") for key in ("title","url","content")) for row in rows)
+    normalized=text.casefold()
+    kind=str(getattr(subject,"kind","") or "")
+    label=str(getattr(subject,"label","") or "").strip()
+    exact_email=kind=="email" and bool(label) and label.casefold() in normalized
+    digits=lambda value:re.sub(r"\D","",str(value or ""))
+    exact_phone=kind=="phone" and len(digits(label))>=8 and digits(label) in digits(text)
+    cross_linked=False
+    if label and kind in {"email","phone","username","profile_or_url"}:
+        for row in rows:
+            content=str(getattr(row,"content","") or "").casefold()
+            if label.casefold() in content and ("rel=me" in content or "sameas" in content or "same_as" in content):
+                cross_linked=True; break
+    # Staleness uses a rolling 365-day window, not a hard-coded year range.
+    cutoff=datetime.now(timezone.utc).timestamp()-365*24*60*60
+    stale=0
+    for row in rows:
+        raw=str(getattr(row,"observed_at","") or "")
+        try:
+            stamp=datetime.fromisoformat(raw.replace("Z","+00:00"))
+            if stamp.tzinfo is None:stamp=stamp.replace(tzinfo=timezone.utc)
+            if stamp.timestamp()<cutoff:stale+=1
+        except (ValueError,TypeError,OverflowError):continue
+    # No cross-record source-count bonus: source labels do not establish independence.
+    name_only=kind in {"source","username"} and bool(label) and not (exact_email or exact_phone or cross_linked)
+    return assess_false_positive_risk(exact_email=exact_email,exact_phone=exact_phone,
+        cross_linked_profile=cross_linked,display_name_only=name_only,stale_sources=stale)
