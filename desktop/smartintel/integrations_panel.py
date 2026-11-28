@@ -160,7 +160,7 @@ class IntegrationsPanel(QWidget):
             "Have I Been Pwned email lookup":"hibp",
             "OpenCorporates company search":"opencorporates",
             "CourtListener opinion search":"courtlistener",
-            "OpenSanctions candidate search":"opensanctions",
+            "OpenSanctions sanctions / PEP matching":"opensanctions",
         }
         source_id=source_ids[self.source.currentText()]
         self.set_busy(True); self.output.setPlainText("Selected source workflow running…")
