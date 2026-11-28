@@ -60,3 +60,15 @@ def test_adapter_manager_detects_schema_drift_without_silent_remapping():
     manager.call("provider", lambda: {"results": [{"uuid": "x"}]})
     assert manager.health_report()["provider"]["schema_drift"] is True
     assert schema_fingerprint({"x": 1}) != schema_fingerprint({"x": "1"})
+
+
+def test_adapter_health_counters_are_safe_under_parallel_calls():
+    from concurrent.futures import ThreadPoolExecutor
+    manager = AdapterManager(retries=0)
+    def call_one(_):
+        return manager.call("parallel-provider", lambda: {"ok": True})
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        list(pool.map(call_one, range(250)))
+    report = manager.health_report()["parallel-provider"]
+    assert report["successes"] == 250
+    assert report["failures"] == 0
