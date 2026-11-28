@@ -11,3 +11,5 @@ reportlab>=4.2,<5
 maigret>=0.5,<1
 phonenumbers>=8.13,<10
 dnspython>=2.6,<3
+cloudpickle>=3,<4
+PySocks>=1.7.1,<2
