@@ -13,6 +13,7 @@ from typing import Any, Callable, Iterable, Mapping
 import json
 import random
 import time
+import threading
 
 
 @dataclass(frozen=True)
@@ -139,36 +140,42 @@ class AdapterManager:
         self.sleep = sleep
         self.clock = clock
         self.health: dict[str, AdapterHealth] = {}
+        self._lock = threading.RLock()
 
     def call(self, source_id: str, adapter: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
-        state = self.health.setdefault(source_id, AdapterHealth())
-        if state.circuit_open_until > self.clock():
-            raise AdapterUnavailable(f"{source_id} circuit is open after repeated failures")
+        with self._lock:
+            state = self.health.setdefault(source_id, AdapterHealth())
+            if state.circuit_open_until > self.clock():
+                raise AdapterUnavailable(f"{source_id} circuit is open after repeated failures")
         last_error: Exception | None = None
         for attempt in range(self.retries + 1):
             try:
                 result = adapter(*args, **kwargs)
-                state.successes += 1
-                state.failures = 0
-                state.circuit_open_until = 0.0
-                state.last_error = ""
-                state.last_success_at = datetime.now(timezone.utc).isoformat()
                 fingerprint = schema_fingerprint(result)
-                if state.last_schema_fingerprint and fingerprint != state.last_schema_fingerprint:
-                    state.schema_drift = True
-                state.last_schema_fingerprint = fingerprint
+                with self._lock:
+                    state.successes += 1
+                    state.failures = 0
+                    state.circuit_open_until = 0.0
+                    state.last_error = ""
+                    state.last_success_at = datetime.now(timezone.utc).isoformat()
+                    if state.last_schema_fingerprint and fingerprint != state.last_schema_fingerprint:
+                        state.schema_drift = True
+                    state.last_schema_fingerprint = fingerprint
                 return result
             except Exception as exc:
                 last_error = exc
                 if attempt < self.retries:
                     self.sleep(self.base_delay * (2 ** attempt) + random.uniform(0, self.base_delay / 4 if self.base_delay else 0))
-        state.failures += 1
-        state.last_error = (str(last_error) or type(last_error).__name__)[:500]
-        if state.failures >= self.failure_threshold:
-            state.circuit_open_until = self.clock() + self.cooldown_seconds
+        with self._lock:
+            state.failures += 1
+            state.last_error = (str(last_error) or type(last_error).__name__)[:500]
+            if state.failures >= self.failure_threshold:
+                state.circuit_open_until = self.clock() + self.cooldown_seconds
         raise last_error  # type: ignore[misc]
 
     def health_report(self) -> dict[str, dict[str, Any]]:
+        with self._lock:
+            snapshot = list(self.health.items())
         return {
             source_id: {
                 "failures": state.failures,
@@ -178,7 +185,7 @@ class AdapterManager:
                 "last_success_at": state.last_success_at,
                 "schema_drift": state.schema_drift,
             }
-            for source_id, state in self.health.items()
+            for source_id, state in snapshot
         }
 
 
