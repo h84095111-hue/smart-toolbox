@@ -24,6 +24,8 @@ class IntegrationsPanel(QWidget):
         self.all_button=QPushButton("⚡  All-in-One Passive Scan"); self.all_button.setObjectName("primary"); self.all_button.clicked.connect(self.run_all_sources); row.addWidget(self.all_button,2); v.addLayout(row)
         identity_row=QHBoxLayout()
         self.identity_type=QComboBox(); self.identity_type.addItems(["Username","Email","Phone"]); identity_row.addWidget(self.identity_type,1)
+        self.site_limit=QComboBox(); self.site_limit.addItem("500 sites",500); self.site_limit.addItem("1,000 sites",1000); self.site_limit.addItem("2,000 sites",2000); self.site_limit.addItem("3,000 sites",3000); identity_row.addWidget(self.site_limit,1)
+        self.identity_type.currentTextChanged.connect(lambda kind: self.site_limit.setEnabled(kind=="Username"))
         self.identity_button=QPushButton("🔎  No-API Identity Check"); self.identity_button.clicked.connect(self.run_identity_check); identity_row.addWidget(self.identity_button,2)
         v.addLayout(identity_row)
         row2=QHBoxLayout(); self.source=QComboBox(); self.source.addItems(["Certificate transparency (crt.sh)","Wayback Machine","VirusTotal domain","AbuseIPDB public IP","urlscan.io domain","AlienVault OTX domain","Shodan existing IP data","Censys existing IP data","SecurityTrails passive DNS","GDELT public news","Public username reference links","Authorized breach-check workflow","MISP exact IOC search"]); row2.addWidget(self.source,2)
@@ -58,7 +60,7 @@ class IntegrationsPanel(QWidget):
             QMessageBox.information(self,"Identifier required","Enter a username, email address or phone number.")
             return
         kind=self.identity_type.currentText().lower()
-        options={"max_sites":500} if kind=="username" else ({"default_region":"MY"} if kind=="phone" else {})
+        options={"max_sites":int(self.site_limit.currentData())} if kind=="username" else ({"default_region":"MY"} if kind=="phone" else {})
         self.set_busy(True)
         self.output.setPlainText(f"NO-API {kind.upper()} CHECK\\nTarget: {value}\\n\\nRunning local/public-source checks…")
         self.task=_Task(lambda: check_identity(kind,value,**options))
