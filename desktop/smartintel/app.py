@@ -169,6 +169,7 @@ class MainWindow(QMainWindow):
         full_db=QPushButton("Enable full DB encryption"); full_db.clicked.connect(self.enable_database_encryption); vault_buttons.addWidget(full_db)
         capture_screen=QPushButton("Capture browser screenshot"); capture_screen.clicked.connect(self.capture_screenshot); vault_buttons.addWidget(capture_screen)
         exif=QPushButton("Inspect image / EXIF"); exif.clicked.connect(self.inspect_image_file); vault_buttons.addWidget(exif)
+        compare=QPushButton("Compare two images"); compare.clicked.connect(self.compare_image_files); vault_buttons.addWidget(compare)
         reverse=QPushButton("Open reverse-image search"); reverse.clicked.connect(self.open_reverse_image_search); vault_buttons.addWidget(reverse)
         import_file=QPushButton("Import attachment"); import_file.clicked.connect(lambda:self.import_attachment("attachment")); vault_buttons.addWidget(import_file)
         import_image=QPushButton("Import screenshot"); import_image.clicked.connect(lambda:self.import_attachment("screenshot")); vault_buttons.addWidget(import_image)
@@ -419,6 +420,29 @@ class MainWindow(QMainWindow):
                 "\nUse the reverse-image search button to open a provider manually; the file was not uploaded.")
         except Exception as exc:QMessageBox.warning(self,"Image inspection failed",str(exc))
 
+    def compare_image_files(self):
+        if not self.require_case(write=True):return
+        first,_=QFileDialog.getOpenFileName(self,"Choose first image","",
+            "Images (*.jpg *.jpeg *.png *.webp *.tif *.tiff *.bmp)")
+        if not first:return
+        second,_=QFileDialog.getOpenFileName(self,"Choose second image","",
+            "Images (*.jpg *.jpeg *.png *.webp *.tif *.tiff *.bmp)")
+        if not second:return
+        try:
+            result=compare_images(first,second)
+            from .models import Evidence
+            item=Evidence(self.case_id,"Local image comparison",
+                result["left"]+" vs "+result["right"],content=json.dumps(result,ensure_ascii=False,indent=2),
+                confidence="Low",kind="Perceptual image comparison")
+            self.store.add_evidence(item)
+            self.refresh_evidence()
+            QMessageBox.information(self,"Image comparison",
+                "dHash Hamming distance: "+str(result["hamming_distance"])+"/64"+
+                "\nSimilarity indicator: "+str(result["similarity_percent"])+"%"+
+                "\nThis is a rough visual resemblance clue, not proof of the same photo or subject.")
+        except Exception as exc:
+            QMessageBox.warning(self,"Image comparison failed",str(exc))
+
     def open_reverse_image_search(self):
         from .image_intel import inspect_image
         path,_=QFileDialog.getOpenFileName(self,"Choose image for reverse search","",
@@ -439,6 +463,10 @@ class MainWindow(QMainWindow):
         items=[{"id":e.id,"title":e.title,"source":e.source,"url":e.url,"content":e.content,
                 "observed_at":e.observed_at,"confidence":e.confidence,"kind":e.kind}
                for e in self.store.evidence(self.case_id)]
+        attachments=[]
+        for row in self.store.attachments(self.case_id):
+            attachments.append({"id":row["id"],"filename":row["filename"],"kind":row["kind"],
+                                "content":self.store.read_attachment(row["id"])})
         path,_=QFileDialog.getSaveFileName(self,"Export signed evidence bundle","smart-intel-signed.zip","ZIP (*.zip)")
         if not path:return
         tsa_url,ok=QInputDialog.getText(self,"Optional trusted timestamp","RFC 3161 TSA URL (leave blank to skip):")
@@ -447,11 +475,14 @@ class MainWindow(QMainWindow):
         if tsa_url.strip():
             tsa_ca,_=QFileDialog.getOpenFileName(self,"Optional TSA trust CA file")
         try:
-            result=signed_export(case,items,path,tsa_url=tsa_url.strip(),tsa_ca_file=tsa_ca)
+            result=signed_export(case,items,path,attachments=attachments,tsa_url=tsa_url.strip(),tsa_ca_file=tsa_ca)
             QMessageBox.information(self,"Signed export created",
-                "Ed25519 signature created.\nSHA-256: "+result["sha256"]+
+                "Ed25519 signature created.\nBundle SHA-256: "+result["sha256"]+
+                "\nManifest SHA-256: "+result["manifest_sha256"]+
+                "\nIncluded attachments: "+str(len(attachments))+
                 "\nTimestamp status: "+result["timestamp_status"]+
-                "\nFor authenticity, compare the embedded signing-key fingerprint with a separately trusted copy.")
+                "\nSigning-key SHA-256 fingerprint: "+result["public_key_sha256"]+
+                "\nFor authenticity, compare the fingerprint with a separately trusted copy.")
         except Exception as exc:QMessageBox.critical(self,"Signed export failed",str(exc))
 
     def verify_signed_bundle(self):
