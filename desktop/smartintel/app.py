@@ -86,6 +86,10 @@ class SettingsDialog(QDialog):
                 validate_proxy_url(self.fields["network_proxy"].text())
             for p,e in self.fields.items():
                 if e.text().strip():save_api_key(p,e.text())
+            host = self.parent()
+            if host is not None and hasattr(host, "network_route_label"):
+                host.network_route_label.setText("Network route: " + proxy_label() +
+                    "\\nVPN is controlled by your operating system.")
             QMessageBox.information(self,"Saved","API keys and network route settings saved to the OS credential store."); self.accept()
         except Exception as e:QMessageBox.critical(self,"Key storage error",str(e))
 
