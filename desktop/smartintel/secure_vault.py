@@ -87,7 +87,7 @@ def import_attachment(root: Path, case_id: str, source_path: str | Path, *, kind
 def read_attachment(row: dict) -> bytes:
     encrypted = Path(row["path"]).read_bytes()
     if sha256(encrypted) != row["ciphertext_sha256"]:
-        raise ValueError("Encrypted attachment hash mismatch.")
+        raise ValueError("Attachment ciphertext hash mismatch.")
     original = decrypt(encrypted)
     if sha256(original) != row["sha256"]:
         raise ValueError("Decrypted attachment hash mismatch.")
