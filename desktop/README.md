@@ -50,3 +50,14 @@ The displayed 0–100 value is a conservative, explainable triage index, not a c
 ## Packaging
 
 See [BUILDING.md](BUILDING.md). Build separately on each target OS; PyInstaller is not a cross-compiler. CI build artifacts are not yet signed public releases.
+
+### Evidence vault and case audit
+
+- Evidence tab supports opt-in encryption of evidence text and imported attachment payloads using Fernet; the random key is stored through the operating-system credential store (keyring).
+- Screenshot files can be imported as evidence attachments. The application does not yet render/capture browser screenshots automatically.
+- Local files can be wrapped in WARC/1.1 resource records; a public HTTP(S) URL can be fetched once and stored as a WARC response record. Redirects are not followed.
+- Attachment exports verify both ciphertext and plaintext SHA-256 hashes before returning the decrypted bytes.
+- Workflow lifecycle events are persisted into a hash-linked SQLite audit-event chain and can be verified from the Evidence tab.
+- Important boundary: this is application-level encryption for evidence payloads and attachments, not full SQLite database encryption. Case names and metadata remain plaintext. A local hash chain detects accidental or partial edits but cannot stop an attacker with filesystem/database access from rewriting the entire chain. Use independently held signing keys and external timestamp/immutable storage for that threat model.
+- Losing the OS credential-store key makes encrypted evidence unrecoverable; the UI refuses to silently replace a missing key.
+
