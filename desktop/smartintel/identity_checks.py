@@ -369,34 +369,18 @@ def _public_profile_url(url: str) -> str:
 def fetch_public_profile_metadata(url: str, *, timeout: float = 10.0, max_bytes: int = 2_000_000) -> dict[str, Any]:
     """Fetch one public HTML profile page without cookies, redirects or challenge bypass."""
     safe_url = _public_profile_url(url)
-    import requests
-    response = requests.get(
-        safe_url,
-        headers={"User-Agent": "SmartIntel-Passive-OSINT/1.0"},
-        timeout=(4.0, timeout),
-        allow_redirects=False,
-        stream=True,
-    )
-    try:
-        if response.is_redirect or response.is_permanent_redirect:
-            return {"status": "redirect_not_followed", "url": safe_url,
-                    "limitations": "Redirects are not followed automatically; review the destination manually."}
-        response.raise_for_status()
-        content_type = response.headers.get("Content-Type", "").lower()
-        if "text/html" not in content_type:
-            return {"status": "not_html", "url": safe_url, "content_type": content_type}
-        chunks: list[bytes] = []
-        total = 0
-        for chunk in response.iter_content(chunk_size=65536):
-            if not chunk:
-                continue
-            total += len(chunk)
-            if total > max_bytes:
-                raise ValueError("Profile page exceeds the 2 MB parsing limit.")
-            chunks.append(chunk)
-        html = b"".join(chunks).decode(response.encoding or "utf-8", errors="replace")
-    finally:
-        response.close()
+    from .collectors.passive import _get_public_pinned
+    response = _get_public_pinned(safe_url)
+    if response.is_redirect or response.is_permanent_redirect:
+        return {"status": "redirect_not_followed", "url": safe_url,
+                "limitations": "Redirects are not followed automatically; review the destination manually."}
+    response.raise_for_status()
+    content_type = response.headers.get("Content-Type", "").lower()
+    if "text/html" not in content_type:
+        return {"status": "not_html", "url": safe_url, "content_type": content_type}
+    if len(response.content) > max_bytes:
+        raise ValueError("Profile page exceeds the 2 MB parsing limit.")
+    html = response.content.decode(response.encoding or "utf-8", errors="replace")
 
     metadata = extract_profile_metadata(html, safe_url)
     candidates: list[dict[str, str]] = []
