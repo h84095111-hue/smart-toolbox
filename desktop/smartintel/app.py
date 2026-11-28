@@ -457,14 +457,17 @@ class MainWindow(QMainWindow):
     def verify_signed_bundle(self):
         path,_=QFileDialog.getOpenFileName(self,"Verify signed evidence bundle","","ZIP (*.zip)")
         if not path:return
+        ca_file,_=QFileDialog.getOpenFileName(self,"Optional TSA trust CA certificate (cancel to skip)")
         try:
-            result=verify_signed_export(path)
+            result=verify_signed_export(path,tsa_ca_file=ca_file)
             if result["valid"]:
                 QMessageBox.information(self,"Signature verifies",
-                    "The Ed25519 signature matches the embedded public key.\nSHA-256: "+result["sha256"]+
-                    "\nThis does not authenticate the signer unless the public key fingerprint is independently trusted.")
+                    "The Ed25519 signature and manifest hash verify.\nManifest SHA-256: "+result["sha256"]+
+                    "\nPublic-key SHA-256 fingerprint: "+result["public_key_sha256"]+
+                    "\nRFC 3161 timestamp: "+result["timestamp_status"]+
+                    "\nAuthenticate the signer fingerprint independently before trusting authorship.")
             else:
-                QMessageBox.warning(self,"Signature invalid","The bundle signature does not match its manifest.")
+                QMessageBox.warning(self,"Signature invalid","The bundle signature or manifest hash does not match.")
         except Exception as exc:QMessageBox.critical(self,"Verification failed",str(exc))
 
     def show_evidence(self):
