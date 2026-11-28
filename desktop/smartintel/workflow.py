@@ -295,7 +295,7 @@ def run_workflow(
     }
 
 
-def run_identity_workflow(identifier_type: str, value: str, **options: Any) -> dict[str, Any]:
+def run_identity_workflow(identifier_type: str, value: str, *, cancellation: CancellationToken | None = None, **options: Any) -> dict[str, Any]:
     """Run one analyst-requested identity check through the common workflow."""
     from .identity_checks import check_identity
 
@@ -324,7 +324,7 @@ def run_identity_workflow(identifier_type: str, value: str, **options: Any) -> d
         target, registry, context={"options": options},
         policy=ExecutionPolicy(max_workers=1, timeout_seconds=60.0 if active else 20.0,
                                allow_active=active, authorized_targets=(target,) if active else ()),
-        selected=(spec_name,), target_type=kind,
+        selected=(spec_name,), target_type=kind, cancellation=cancellation,
     )
     payload = workflow["findings"][0] if workflow["findings"] else {}
     return {"result": payload, "run_id": workflow["run_id"], "events": workflow["events"],
