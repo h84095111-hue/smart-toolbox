@@ -63,3 +63,8 @@ def assess_evidence_risk(evidence:list[Any],subject:Any=None)->RiskAssessment:
     name_only=kind in {"source","username"} and bool(label) and not (exact_email or exact_phone or cross_linked)
     return assess_false_positive_risk(exact_email=exact_email,exact_phone=exact_phone,
         cross_linked_profile=cross_linked,display_name_only=name_only,stale_sources=stale)
+
+def calibration_status(labeled_examples:int)->str:
+    if labeled_examples<100:
+        return "uncalibrated: at least 100 labeled examples required before calibration is considered"
+    return "calibration_candidate: validate on held-out examples and report calibration metrics before displaying probabilities"
