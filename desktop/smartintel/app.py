@@ -359,6 +359,19 @@ class MainWindow(QMainWindow):
         start=self.timeline_from.text().strip() if hasattr(self,"timeline_from") else ""
         end=self.timeline_to.text().strip() if hasattr(self,"timeline_to") else ""
         query=self.timeline_query.text().strip().casefold() if hasattr(self,"timeline_query") else ""
+        from datetime import datetime
+        for label, value in (("From", start), ("To", end)):
+            if value:
+                try:
+                    datetime.strptime(value, "%Y-%m-%d")
+                except ValueError:
+                    QMessageBox.warning(self, "Invalid timeline date",
+                        label + " date must use YYYY-MM-DD format.")
+                    return
+        if start and end and start > end:
+            QMessageBox.warning(self, "Invalid timeline range",
+                "The start date must not be later than the end date.")
+            return
         self.visible_evidence=[]
         for item in self.evidence:
             day=(item.observed_at or "")[:10]
