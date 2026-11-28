@@ -6,7 +6,7 @@ from PyQt6.QtGui import QBrush,QPen,QColor,QFont
 from PyQt6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QLabel,QPushButton,QComboBox,
     QLineEdit,QGraphicsView,QGraphicsScene,QGraphicsEllipseItem,QGraphicsSimpleTextItem,
     QGraphicsLineItem,QTextBrowser,QSplitter,QMessageBox,QFileDialog)
-from .identity_graph import build_identity_graph,validate_graph,IdentityGraph
+from .identity_graph import build_identity_graph,validate_graph,IdentityGraph,apply_graph_aliases
 from .graph_algorithms import connected_components,filter_graph,force_layout
 from .match_scoring import assess_evidence_risk
 from .ai_analysis import analyze_evidence
@@ -72,6 +72,14 @@ class IdentityGraphPanel(QWidget):
         self.edge_filter.currentTextChanged.connect(self.schedule_render)
         self.search_filter.textChanged.connect(self.schedule_render)
         root.addLayout(filters)
+        editor=QHBoxLayout()
+        self.add_kind=QComboBox(); self.add_kind.addItems(["username","email","phone","profile_or_url"])
+        self.add_value=QLineEdit(); self.add_value.setPlaceholderText("Add a manually verified lead")
+        add_lead=QPushButton("Add lead"); add_lead.clicked.connect(self.add_manual_lead)
+        self.alias_from=QComboBox(); self.alias_to=QComboBox()
+        merge=QPushButton("Merge alias → canonical"); merge.clicked.connect(self.merge_alias)
+        for control in (self.add_kind,self.add_value,add_lead,self.alias_from,self.alias_to,merge): editor.addWidget(control)
+        root.addLayout(editor)
         self.debounce=QTimer(self); self.debounce.setSingleShot(True); self.debounce.setInterval(250); self.debounce.timeout.connect(self.render_graph)
         split=QSplitter(Qt.Orientation.Horizontal); self.scene=QGraphicsScene(self); self.view=_GraphView(self.scene)
         self.view.setMinimumHeight(360); self.view.setStyleSheet("background:#091323;border:1px solid #263650;border-radius:8px")
@@ -89,8 +97,50 @@ class IdentityGraphPanel(QWidget):
     def refresh(self):
         if not self.case_id:return
         self.evidence=self.store.evidence(self.case_id)
-        self.graph=build_identity_graph(self.evidence); validate_graph(self.graph)
+        self.graph=build_identity_graph(self.evidence); self.graph=apply_graph_aliases(self.graph,self.store.graph_aliases(self.case_id)); validate_graph(self.graph)
+        self.refresh_alias_choices()
         self.schedule_render()
+    def refresh_alias_choices(self):
+        self.alias_from.clear(); self.alias_to.clear()
+        for node in (self.graph.nodes if self.graph else []):
+            label = node.kind + ": " + node.label[:42]
+            self.alias_from.addItem(label, node.id)
+            self.alias_to.addItem(label, node.id)
+
+    def add_manual_lead(self):
+        value = self.add_value.text().strip()
+        if not self.case_id or not value:
+            QMessageBox.information(self, "Lead required", "Enter a value and select an active case.")
+            return
+        from .models import Evidence
+        payload = {"semantic_identifiers": [{"kind": self.add_kind.currentText(), "value": value,
+                   "reason": "Manually entered by analyst; unverified lead"}],
+                   "analyst_annotation": True}
+        item = Evidence(self.case_id, "Analyst annotation", "Manually added graph lead",
+                        content=json.dumps(payload), confidence="Low", kind="Analyst annotation")
+        self.store.add_evidence(item)
+        self.add_value.clear()
+        self.refresh()
+        self.status.setText("Analyst lead added with explicit provenance; it is not independently verified.")
+
+    def merge_alias(self):
+        alias = self.alias_from.currentData()
+        canonical = self.alias_to.currentData()
+        if not alias or not canonical:
+            return
+        if alias == canonical:
+            QMessageBox.information(self, "Choose two nodes", "Select different alias and canonical nodes.")
+            return
+        answer = QMessageBox.question(self, "Confirm analyst merge",
+            "Merge the first node into the second for this case graph? This is an analyst decision, not an automatic identity match.")
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            self.store.add_graph_alias(self.case_id, alias, canonical, created_by="analyst")
+            self.refresh()
+        except Exception as exc:
+            QMessageBox.warning(self, "Graph merge failed", str(exc))
+
     def schedule_render(self,*_):
         if self.graph:self.debounce.start()
     def render_graph(self):
