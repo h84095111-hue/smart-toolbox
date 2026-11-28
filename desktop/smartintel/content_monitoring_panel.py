@@ -189,6 +189,10 @@ class ContentMonitoringPanel(QWidget):
                 config["account"] = target
                 if not ("@" in target and ("." in target or "://" in target)):
                     raise ValueError("Use @account@instance or a public Mastodon profile URL.")
+                if "://" in target:
+                    from urllib.parse import urlparse
+                    from .social_monitor import _reject_secret_query
+                    _reject_secret_query(urlparse(target))
             elif kind == "bluesky_search":
                 if len(target) < 2 or len(target) > 200:
                     raise ValueError("Bluesky search terms must be 2-200 characters.")
@@ -198,6 +202,8 @@ class ContentMonitoringPanel(QWidget):
                 parsed = urlparse(target)
                 if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.port not in {None, 443}:
                     raise ValueError("RSS/Atom feeds must be public HTTPS URLs.")
+                from .social_monitor import _reject_secret_query
+                _reject_secret_query(parsed)
                 config["feed_url"] = target
             elif kind == "telegram_channels":
                 config["channels"] = normalize_public_channels(target)
@@ -209,6 +215,8 @@ class ContentMonitoringPanel(QWidget):
                 parsed = urlparse(target)
                 if parsed.scheme not in {"https", "http"} or not parsed.hostname or not parsed.hostname.endswith(".onion"):
                     raise ValueError("Enter one exact HTTP(S) v3 .onion page URL.")
+                from .darkweb_monitor import _reject_secret_query
+                _reject_secret_query(parsed)
                 _local_tor_proxy()
                 config["url"] = target
             interval = int(self.interval.currentData())
