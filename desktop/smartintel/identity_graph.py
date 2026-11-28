@@ -53,15 +53,19 @@ def _structured_candidates(title: str,url: str,content: str):
             if value:
                 if any(word in key for word in ("email","e-mail")):
                     found.append(("email",value,"Email value from semantic HTML metadata"))
-                if any(word in key for word in ("telephone","phone","tel")):
-                    found.append(("phone",value,"Phone value from semantic HTML metadata"))
+                if any(token in re.split(r"[^a-z0-9]+",key) for token in ("telephone","phone","tel")):
+                    digits=re.sub(r"\\D","",value)
+                    if len(digits)>=8:
+                        found.append(("phone",value,"Phone value from semantic HTML metadata"))
                 if any(word in key for word in ("author","username","screen_name","twitter:creator")):
                     found.append(("username",value.lstrip("@"),"Account label from semantic HTML metadata"))
             href=str(attrs.get("href") or "").strip()
             if href.lower().startswith("mailto:"):
                 found.append(("email",unquote(href[7:].split("?")[0]),"mailto link in supplied HTML"))
             elif href.lower().startswith("tel:"):
-                found.append(("phone",unquote(href[4:].split("?")[0]),"tel link in supplied HTML"))
+                phone_value=unquote(href[4:].split("?")[0])
+                if len(re.sub(r"\\D","",phone_value))>=8:
+                    found.append(("phone",phone_value,"tel link in supplied HTML"))
             elif href.startswith(("https://","http://")):
                 found.append(("profile_or_url",href,"HTTP link in supplied HTML"))
         text=soup.get_text(" ",strip=True)
