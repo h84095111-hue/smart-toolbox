@@ -12,7 +12,7 @@ Status reflects code in this branch, not a marketing checklist.
 | HIBP integration | Implemented | Exact analyst-supplied email breach metadata lookup; subscription key required; no password/dump retrieval |
 | Corporate records | Implemented | OpenCorporates company search; API token and provider terms apply |
 | Court APIs | Partial | CourtListener published-opinion search; not complete docket or court-record coverage |
-| Sanctions integrations | Partial | OpenSanctions candidate search; verify identity and licensing, not a legal decision |
+| Sanctions integrations | Partial | OpenSanctions query-by-example matching via /match with topic filters; candidates only, not a legal determination; business licensing may apply |
 | Username lookup | Partial | Public username reference sources and analyst-triggered Maigret checks; no identity proof |
 | Email / phone | Partial | Format, DNS and provider-supported checks; HIBP is opt-in exact email lookup; no mailbox access or credential dumps |
 | Reverse image search / EXIF / geolocation | Partial | Local EXIF/GPS/SHA-256/dHash; external reverse-image portal handoff is manual, no automatic image upload/provider API |
