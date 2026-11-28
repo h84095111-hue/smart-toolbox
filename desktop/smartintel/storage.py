@@ -127,7 +127,7 @@ class Store:
                 (case_id,))]
 
     def cases_for_user(self, user):
-        if not user:
+        if not user or user.get("role") == "admin":
             return self.cases()
         with self.connect() as db:
             return [dict(row) for row in db.execute(
@@ -135,7 +135,7 @@ class Store:
                 (user["id"],))]
 
     def user_case_role(self, case_id, user):
-        if not user:
+        if not user or user.get("role") == "admin":
             return "owner"
         with self.connect() as db:
             row = db.execute("SELECT role FROM case_members WHERE case_id=? AND user_id=?",
