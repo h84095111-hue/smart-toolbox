@@ -3,6 +3,7 @@ from PyQt6.QtCore import QThread,pyqtSignal
 from PyQt6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QLabel,QComboBox,QLineEdit,QPushButton,QPlainTextEdit,QMessageBox
 from .collectors import passive_sources as src
 from .collectors.all_in_one import run_all
+from .identity_checks import check_identity
 
 class _Task(QThread):
     done=pyqtSignal(object); failed=pyqtSignal(str)
@@ -21,6 +22,10 @@ class IntegrationsPanel(QWidget):
         note.setWordWrap(True); note.setObjectName("muted"); v.addWidget(note)
         row=QHBoxLayout(); self.target=QLineEdit(); self.target.setPlaceholderText("domain · public IP · URL · username · email"); row.addWidget(self.target,3)
         self.all_button=QPushButton("⚡  All-in-One Passive Scan"); self.all_button.setObjectName("primary"); self.all_button.clicked.connect(self.run_all_sources); row.addWidget(self.all_button,2); v.addLayout(row)
+        identity_row=QHBoxLayout()
+        self.identity_type=QComboBox(); self.identity_type.addItems(["Username","Email","Phone"]); identity_row.addWidget(self.identity_type,1)
+        self.identity_button=QPushButton("🔎  No-API Identity Check"); self.identity_button.clicked.connect(self.run_identity_check); identity_row.addWidget(self.identity_button,2)
+        v.addLayout(identity_row)
         row2=QHBoxLayout(); self.source=QComboBox(); self.source.addItems(["Certificate transparency (crt.sh)","Wayback Machine","VirusTotal domain","AbuseIPDB public IP","urlscan.io domain","AlienVault OTX domain","Shodan existing IP data","Censys existing IP data","SecurityTrails passive DNS","GDELT public news","Public username reference links","Authorized breach-check workflow","MISP exact IOC search"]); row2.addWidget(self.source,2)
         self.misp=QLineEdit(); self.misp.setPlaceholderText("Optional MISP HTTPS base URL"); row2.addWidget(self.misp,2)
         self.run_button=QPushButton("Run selected source"); self.run_button.clicked.connect(self.run_lookup); row2.addWidget(self.run_button); v.addLayout(row2)
@@ -29,7 +34,7 @@ class IntegrationsPanel(QWidget):
         self._busy=False
     def set_busy(self,busy):
         self._busy=busy
-        self.all_button.setEnabled(not busy); self.run_button.setEnabled(not busy)
+        self.all_button.setEnabled(not busy); self.run_button.setEnabled(not busy); self.identity_button.setEnabled(not busy)
         if busy:self.add_button.setEnabled(False)
     def run_all_sources(self):
         value=self.target.text().strip()
@@ -47,6 +52,45 @@ class IntegrationsPanel(QWidget):
         self.output.setPlainText("\n".join(lines))
         for item in findings:self.finding_ready.emit(item)
         self.latest=None; self.add_button.setEnabled(False)
+    def run_identity_check(self):
+        value=self.target.text().strip()
+        if not value:
+            QMessageBox.information(self,"Identifier required","Enter a username, email address or phone number.")
+            return
+        kind=self.identity_type.currentText().lower()
+        options={"max_sites":500} if kind=="username" else ({"default_region":"MY"} if kind=="phone" else {})
+        self.set_busy(True)
+        self.output.setPlainText(f"NO-API {kind.upper()} CHECK\\nTarget: {value}\\n\\nRunning local/public-source checks…")
+        self.task=_Task(lambda: check_identity(kind,value,**options))
+        self.task.done.connect(self.identity_complete)
+        self.task.failed.connect(self.fail)
+        self.task.finished.connect(lambda:self.set_busy(False))
+        self.task.start()
+    def identity_complete(self,result):
+        lines=[f"IDENTITY CHECK — {result.get('identifier_type',result.get('tool',''))}",
+               f"Status: {result.get('status','unknown')}"]
+        if result.get("tool"):
+            lines.append(f"Tool: {result['tool']} | Requested site limit: {result.get('requested_site_limit','default')}")
+        if result.get("e164"): lines.append(f"Normalized: {result['e164']}")
+        if result.get("domain"): lines.append(f"Mail domain: {result['domain']} | DNS: {result.get('mail_dns_status')}")
+        if result.get("region"): lines.append(f"Region: {result['region']} | Number type: {result.get('number_type')}")
+        findings=result.get("findings",[])
+        lines.extend(["",f"Candidate profiles: {len(findings)}"])
+        for item in findings:
+            lines.append(f"[{item.get('confidence','Unknown')}] {item.get('title','Profile')} — {item.get('url','')}")
+            self.finding_ready.emit({"title":item.get("title","Username candidate"),
+                "content":item.get("details","Candidate public profile; verify manually."),
+                "source":item.get("source","Maigret"),"url":item.get("url",""),
+                "confidence":item.get("confidence","Medium"),"kind":"Identity lead"})
+        for url in result.get("public_search_urls",[]):
+            lines.append("Public search: "+url)
+        if result.get("install_hint"): lines.extend(["",result["install_hint"]])
+        if result.get("interpretation"): lines.extend(["",result["interpretation"]])
+        if result.get("limitations"): lines.extend(["",result["limitations"]])
+        if result.get("stderr_tail"): lines.extend(["","Tool diagnostics:",result["stderr_tail"]])
+        self.output.setPlainText("\\n".join(lines))
+        self.latest=None
+        self.add_button.setEnabled(False)
     def run_lookup(self):
         value=self.target.text().strip()
         if not value: QMessageBox.information(self,"Target required","Enter a lookup value."); return
