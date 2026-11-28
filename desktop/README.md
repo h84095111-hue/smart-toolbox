@@ -44,7 +44,7 @@ This remains an actively developing local desktop application, not a complete en
 - Scheduled monitoring runs only while the Smart Intel desktop application is open. It does not run as a Windows service, system daemon or hosted scheduler.
 - Proxy routing is opt-in. Tor must already be running and expose a SOCKS5 listener; VPNs are managed by the operating system. A proxy is not an anonymity guarantee and pinned-target lookups resolve the destination locally before connecting.
 - Browser screenshot capture validates public URLs and subrequests, but a browser and proxy are complex network clients; do not treat this as a hardened browser sandbox for untrusted URLs.
-- CourtListener search covers published opinions, not every docket or court record. OpenSanctions results are candidate matches, never a legal determination; confirm names, dates, identifiers and primary sources. Check the provider's current license for your use case.
+- CourtListener search covers published opinions, not every docket or court record. OpenSanctions results are candidate matches, never a legal determination; confirm names, dates, identifiers and primary sources. OpenSanctions business use requires checking its paid licensing terms; the connector must not be treated as a free commercial screening service.
 - OpenCorporates coverage and HIBP lookups depend on current API access, subscription, provider limits and terms.
 - Historical WHOIS, broad social account discovery, Telegram/dark-web/forum collection, remote team hosting, task assignment/comments, SIEM/SOAR and public signed installers remain out of scope or planned.
 
@@ -60,9 +60,9 @@ python -m playwright install chromium
 ```
 
 - **Proxy / Tor:** Open AI & network settings and enter an HTTP proxy, HTTPS proxy or SOCKS5 URL such as `socks5://127.0.0.1:9050`. Start/configure Tor separately. The app displays the selected route. VPN routing is managed by the OS, not Smart Intel.
-- **HIBP:** Add a Have I Been Pwned API subscription key in provider settings. A lookup checks only the exact email address entered and saves breach metadata; it does not retrieve passwords or credential dumps.
+- **HIBP:** Add a Have I Been Pwned API subscription key in provider settings. A lookup checks only the exact email address entered and saves breach metadata; it does not retrieve passwords or credential dumps. Results include the required provider attribution.
 - **Company / court / sanctions:** Configure OpenCorporates, CourtListener and OpenSanctions keys in provider settings. Select the corresponding source in the OSINT Sources tab and enter a company name or record query. OpenSanctions uses candidate matching and must be manually reviewed.
-- **Images:** The Evidence tab can inspect local EXIF/GPS metadata, SHA-256 and perceptual hashes. Reverse-image portals open separately; the analyst decides whether to upload an image. Local file comparison and matching do not establish subject identity.
+- **Images:** The Evidence tab can inspect local EXIF/GPS metadata, SHA-256 and perceptual hashes. Reverse-image portals open separately; the analyst decides whether to upload an image. Local file comparison and matching do not establish subject identity. HIBP attribution is included in result evidence under CC BY 4.0; provider terms still apply.
 - **Screenshots:** Enable the evidence vault, then use Capture browser screenshot. Playwright Chromium is required. The captured PNG is imported into the encrypted attachment vault.
 - **Full DB encryption:** Enable full SQLCipher encryption from Evidence & Timeline. Keep the adjacent `.plaintext-backup` in a safe recovery location until you've verified the encrypted database. The SQLCipher key is stored in the OS credential store.
 - **Signed export:** Use Reports → Export signed bundle. An RFC 3161 TSA URL is optional; to mark the timestamp verified, provide the TSA trust CA when prompted. Verify a signer fingerprint from an independent trusted channel.
@@ -86,11 +86,11 @@ See [BUILDING.md](BUILDING.md). Build separately on each target OS; PyInstaller 
 ### Evidence vault and case audit
 
 - Evidence tab supports opt-in encryption of evidence text and imported attachment payloads using Fernet; the random key is stored through the operating-system credential store (keyring).
-- Screenshot files can be imported as evidence attachments. The application does not yet render/capture browser screenshots automatically.
+- Public browser screenshots can be captured with Playwright Chromium and are imported into the encrypted attachment vault when it is enabled; screenshots can also be imported from disk.
 - Local files can be wrapped in WARC/1.1 resource records; a public HTTP(S) URL can be fetched once and stored as a WARC response record. Redirects are not followed.
 - Attachment exports verify both ciphertext and plaintext SHA-256 hashes before returning the decrypted bytes.
 - Workflow lifecycle events are persisted into a hash-linked SQLite audit-event chain and can be verified from the Evidence tab.
-- Important boundary: this is application-level encryption for evidence payloads and attachments, not full SQLite database encryption. Case names and metadata remain plaintext. A local hash chain detects accidental or partial edits but cannot stop an attacker with filesystem/database access from rewriting the entire chain. Use independently held signing keys and external timestamp/immutable storage for that threat model.
+- Important boundary: full-database SQLCipher encryption is now an optional migration. Until SQLCipher is enabled, this is application-level encryption for evidence payloads and attachments, not full database encryption. The migration retains a plaintext backup; case metadata is protected only after migration. A local hash chain detects accidental or partial edits but cannot stop an attacker with filesystem/database access from rewriting the entire chain. Use independently held signing keys and external timestamp/immutable storage for that threat model.
 - Losing the OS credential-store key makes encrypted evidence unrecoverable; the UI refuses to silently replace a missing key.
 
 
