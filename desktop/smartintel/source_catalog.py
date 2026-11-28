@@ -38,7 +38,7 @@ SOURCE_CATALOG: tuple[SourceDescriptor, ...] = (
     SourceDescriptor("crtsh", "crt.sh", "certificate_transparency", "public_api", status="implemented"),
     SourceDescriptor("wayback", "Internet Archive Wayback", "web_history", "public_api", status="implemented"),
     SourceDescriptor("virustotal", "VirusTotal", "threat_intelligence", "authenticated_api", ("SMART_INTEL_VIRUSTOTAL_API_KEY",), "implemented"),
-    SourceDescriptor("urlscan", "urlscan.io", "web_analysis", "authenticated_api", ("SMART_INTEL_URLSCAN_API_KEY",), "implemented"),
+    SourceDescriptor("urlscan", "urlscan.io", "web_analysis", "public_api", status="implemented"),
     SourceDescriptor("otx", "AlienVault OTX", "threat_intelligence", "authenticated_api", ("SMART_INTEL_OTX_API_KEY",), "implemented"),
     SourceDescriptor("securitytrails", "SecurityTrails", "passive_dns", "authenticated_api", ("SMART_INTEL_SECURITYTRAILS_API_KEY",), "implemented"),
     SourceDescriptor("abuseipdb", "AbuseIPDB", "ip_reputation", "authenticated_api", ("SMART_INTEL_ABUSEIPDB_API_KEY",), "implemented"),
