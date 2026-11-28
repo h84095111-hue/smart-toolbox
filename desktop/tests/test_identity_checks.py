@@ -113,6 +113,7 @@ def test_profile_parser_extracts_only_explicit_rel_me_pivots(monkeypatch):
         encoding = "utf-8"
         is_redirect = False
         is_permanent_redirect = False
+        content = b'<html><head><title>Public page</title></head><body><a rel="me" href="https://social.example/@alice2">profile</a></body></html>'
         def raise_for_status(self): pass
         def iter_content(self, chunk_size=65536):
             yield b'<html><head><title>Public page</title></head><body><a rel="me" href="https://social.example/@alice2">profile</a></body></html>'
