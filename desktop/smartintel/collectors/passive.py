@@ -47,6 +47,35 @@ def collect_ip(value):
     except Exception as e: out.append(Finding('Reverse DNS',str(e),'System DNS',confidence='Low'))
     return out
 
+def _semantic_identifiers(soup):
+    """Preserve selected semantic identity hints before HTML is reduced to text."""
+    import re
+    from urllib.parse import unquote
+    found=[]; seen=set()
+    def add(kind,value,reason):
+        value=str(value or "").strip()
+        if not value:return
+        if kind=="phone" and len(re.sub(r"\D","",value))<8:return
+        key=(kind,value.casefold())
+        if key not in seen:
+            seen.add(key); found.append({"kind":kind,"value":value[:1000],"reason":reason})
+    for tag in soup.find_all(True):
+        attrs=tag.attrs
+        semantic=" ".join(str(attrs.get(k,"")) for k in ("itemprop","name","property")).casefold()
+        value=attrs.get("content") or attrs.get("value")
+        tokens=set(re.split(r"[^a-z0-9]+",semantic))
+        if value:
+            if tokens.intersection({"email","e-mail"}):add("email",value,"Semantic HTML email metadata")
+            if tokens.intersection({"telephone","phone","tel"}):add("phone",value,"Semantic HTML phone metadata")
+        href=str(attrs.get("href") or "").strip()
+        if href.lower().startswith("mailto:"):add("email",unquote(href[7:].split("?")[0]),"mailto link")
+        elif href.lower().startswith("tel:"):add("phone",unquote(href[4:].split("?")[0]),"tel link")
+        elif href.startswith(("https://","http://")):
+            rel=attrs.get("rel") or []
+            if isinstance(rel,str):rel=rel.split()
+            if "me" in rel:add("profile_or_url",href,"Self-asserted rel=me profile link")
+    return found
+
 def collect_website(url):
     url=url.strip()
     if not urlparse(url).scheme: url='https://'+url
@@ -65,6 +94,7 @@ def collect_website(url):
     raw=next(r.iter_content(MAX_PAGE_BYTES+1),b'')
     if len(raw)>MAX_PAGE_BYTES: raw=raw[:MAX_PAGE_BYTES]
     text=raw.decode(r.encoding or 'utf-8',errors='replace'); soup=BeautifulSoup(text,'html.parser')
+    semantic_identifiers=_semantic_identifiers(soup)
     for node in soup(['script','style','noscript']): node.decompose()
     title=soup.title.get_text(' ',strip=True) if soup.title else '(no title)'
     meta=soup.find('meta',attrs={'name':'description'}) or soup.find('meta',attrs={'property':'og:description'})
@@ -74,5 +104,5 @@ def collect_website(url):
         if a['href'].startswith(('http://','https://')): links.append({'text':a.get_text(' ',strip=True)[:100],'url':a['href']})
     allowed=('server','content-type','content-length','last-modified','etag','strict-transport-security','content-security-policy','x-frame-options','x-content-type-options','referrer-policy')
     headers={k:v for k,v in r.headers.items() if k.lower() in allowed}
-    info={'requested_url':url,'status_code':r.status_code,'redirect_location':r.headers.get('Location'),'title':title,'description':description,'headers':headers,'links':links,'body_excerpt':' '.join(soup.get_text(' ',strip=True).split())[:12000],'sha256_response_excerpt':hashlib.sha256(raw).hexdigest()}
+    info={'requested_url':url,'status_code':r.status_code,'redirect_location':r.headers.get('Location'),'title':title,'description':description,'headers':headers,'links':links,'semantic_identifiers':semantic_identifiers,'body_excerpt':' '.join(soup.get_text(' ',strip=True).split())[:12000],'sha256_response_excerpt':hashlib.sha256(raw).hexdigest()}
     return [Finding('Public website snapshot',json.dumps(info,indent=2,ensure_ascii=False),'HTTP public page',url,'High')]
