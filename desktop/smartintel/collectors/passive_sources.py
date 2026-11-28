@@ -1,15 +1,19 @@
 """Rate-limited passive public-source OSINT integrations. No scanning or access-control bypass."""
-import os,json,time
+import os,json,time,threading
 from urllib.parse import quote
 import requests
 TIMEOUT=15
 UA={"User-Agent":"SmartIntel/2.0 (public research client)"}
 _last={}
+_rate_lock=threading.Lock()
 def _get(url,params=None,headers=None,timeout=TIMEOUT):
-    host=requests.utils.urlparse(url).netloc; now=time.monotonic()
-    delay=max(0,1-(now-_last.get(host,0)))
+    host=requests.utils.urlparse(url).netloc
+    now=time.monotonic()
+    with _rate_lock:
+        next_allowed=_last.get(host,0.0)
+        delay=max(0.0,next_allowed-now)
+        _last[host]=max(now,next_allowed)+1.0
     if delay: time.sleep(delay)
-    _last[host]=time.monotonic()
     r=requests.get(url,params=params,headers={**UA,**(headers or {})},timeout=timeout); r.raise_for_status(); return r
 def _key(provider):
     try:
