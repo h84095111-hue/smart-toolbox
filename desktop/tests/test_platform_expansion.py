@@ -60,6 +60,10 @@ def test_local_accounts_hash_passwords_and_limit_case_access(tmp_path):
     assert store.user_case_role(case_id, viewer_user) == "viewer"
     assert store.cases_for_user(viewer_user)[0]["id"] == case_id
     assert store.cases_for_user({"id": owner, "role": "admin"})[0]["id"] == case_id
+    with pytest.raises(ValueError, match="last active administrator"):
+        store.set_user_disabled(owner, True)
+    store.set_user_disabled(viewer, True)
+    assert store.authenticate_user("viewer_one", "another-long-password") is None
 
 
 def test_monitor_schedule_is_persistent_and_minimum_interval_enforced(tmp_path):
@@ -143,6 +147,11 @@ def test_signed_export_verifies_and_detects_tampering(tmp_path, monkeypatch):
     monkeypatch.setattr(signing, "get_api_key", lambda provider: secrets.get(provider))
     monkeypatch.setattr(signing, "save_api_key", lambda provider, value: secrets.__setitem__(provider, value))
     bundle = tmp_path / "case.signed.zip"
-    result = signing.signed_export({"name": "Case"}, [{"id": "ev-1", "content": "observation"}], bundle)
+    result = signing.signed_export({"name": "Case"}, [{"id": "ev-1", "content": "observation"}], bundle,
+                                  attachments=[{"id": "file-1", "filename": "image.png",
+                                                "kind": "screenshot", "content": b"fake-png-bytes"}])
     assert result["timestamp_status"] == "not_requested"
-    assert signing.verify_signed_export(bundle)["valid"] is True
+    verified = signing.verify_signed_export(bundle)
+    assert verified["valid"] is True
+    assert verified["attachments"] == [{"id": "file-1", "valid": True}]
+    assert len(verified["public_key_sha256"]) == 64
