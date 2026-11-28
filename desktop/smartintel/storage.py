@@ -38,6 +38,8 @@ class Store:
                 CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY,username TEXT NOT NULL UNIQUE,password_hash TEXT NOT NULL,role TEXT NOT NULL,created_at TEXT NOT NULL,disabled INTEGER NOT NULL DEFAULT 0);
                 CREATE TABLE IF NOT EXISTS case_members(case_id TEXT NOT NULL,user_id TEXT NOT NULL,role TEXT NOT NULL,created_at TEXT NOT NULL,PRIMARY KEY(case_id,user_id),FOREIGN KEY(case_id) REFERENCES cases(id),FOREIGN KEY(user_id) REFERENCES users(id));
                 CREATE TABLE IF NOT EXISTS monitor_schedules(id TEXT PRIMARY KEY,case_id TEXT NOT NULL,target TEXT NOT NULL,interval_seconds INTEGER NOT NULL,next_run_at TEXT NOT NULL,enabled INTEGER NOT NULL,created_by TEXT NOT NULL,last_run_at TEXT,last_status TEXT DEFAULT '',created_at TEXT NOT NULL,FOREIGN KEY(case_id) REFERENCES cases(id),FOREIGN KEY(created_by) REFERENCES users(id));
+                CREATE TABLE IF NOT EXISTS content_monitors(id TEXT PRIMARY KEY,case_id TEXT NOT NULL,kind TEXT NOT NULL,config_json TEXT NOT NULL,interval_seconds INTEGER NOT NULL,next_run_at TEXT NOT NULL,enabled INTEGER NOT NULL,created_by TEXT NOT NULL,last_run_at TEXT,last_status TEXT DEFAULT '',created_at TEXT NOT NULL,FOREIGN KEY(case_id) REFERENCES cases(id),FOREIGN KEY(created_by) REFERENCES users(id));
+                CREATE TABLE IF NOT EXISTS content_monitor_items(monitor_id TEXT NOT NULL,item_key TEXT NOT NULL,seen_at TEXT NOT NULL,PRIMARY KEY(monitor_id,item_key),FOREIGN KEY(monitor_id) REFERENCES content_monitors(id) ON DELETE CASCADE);
                 CREATE INDEX IF NOT EXISTS idx_evidence_case ON evidence(case_id);
                 CREATE INDEX IF NOT EXISTS idx_attachments_case ON vault_attachments(case_id);
                 CREATE INDEX IF NOT EXISTS idx_audit_case ON audit_events(case_id,seq);
@@ -237,6 +239,100 @@ class Store:
             db.execute("DELETE FROM monitor_schedules WHERE id=?", (schedule_id,))
         if row:
             self.append_event(row["case_id"], {"action": "monitor_schedule_removed", "schedule_id": schedule_id})
+
+    def create_content_monitor(self, case_id, kind, config, interval_seconds, created_by):
+        import uuid
+        allowed = {"mastodon_account", "bluesky_search", "rss_feed", "telegram_channels", "onion_page"}
+        if kind not in allowed:
+            raise ValueError("Unsupported social/Telegram/onion monitor type.")
+        interval = int(interval_seconds)
+        if interval < 3600 or interval > 30 * 86400:
+            raise ValueError("Monitoring interval must be between 1 hour and 30 days.")
+        if not isinstance(config, dict):
+            raise ValueError("Monitor settings must be a structured object.")
+        if kind == "telegram_channels":
+            with self.connect() as db:
+                exists = db.execute("SELECT 1 FROM content_monitors WHERE kind=? AND enabled=1 LIMIT 1",
+                                    (kind,)).fetchone()
+            if exists:
+                raise ValueError("Use one Telegram monitor containing all public channel usernames. Telegram uses one bot update cursor per bot token.")
+        monitor_id = str(uuid.uuid4())
+        now = datetime.now(timezone.utc).isoformat()
+        with self.connect() as db:
+            db.execute("""INSERT INTO content_monitors
+                (id,case_id,kind,config_json,interval_seconds,next_run_at,enabled,created_by,created_at)
+                VALUES(?,?,?,?,?,?,?,?,?)""",
+                (monitor_id, case_id, kind, json.dumps(config, ensure_ascii=False),
+                 interval, now, 1, created_by, now))
+        self.append_event(case_id, {"action": "content_monitor_created", "monitor_id": monitor_id,
+                                    "kind": kind, "interval_seconds": interval})
+        return monitor_id
+
+    def content_monitors(self, case_id=None):
+        with self.connect() as db:
+            if case_id:
+                rows = db.execute("SELECT * FROM content_monitors WHERE case_id=? ORDER BY created_at DESC",
+                                  (case_id,))
+            else:
+                rows = db.execute("SELECT * FROM content_monitors ORDER BY created_at DESC")
+            result = []
+            for row in rows:
+                item = dict(row)
+                try:
+                    item["config"] = json.loads(item.pop("config_json"))
+                except (ValueError, TypeError):
+                    item["config"] = {}
+                result.append(item)
+            return result
+
+    def due_content_monitors(self, now=None):
+        stamp = (now or datetime.now(timezone.utc)).isoformat()
+        with self.connect() as db:
+            rows = db.execute("SELECT * FROM content_monitors WHERE enabled=1 AND next_run_at<=? ORDER BY next_run_at",
+                              (stamp,))
+            result = []
+            for row in rows:
+                item = dict(row)
+                try:
+                    item["config"] = json.loads(item.pop("config_json"))
+                except (ValueError, TypeError):
+                    item["config"] = {}
+                result.append(item)
+            return result
+
+    def update_content_monitor(self, monitor_id, *, config=None, next_run_at=None,
+                               enabled=None, status=None):
+        with self.connect() as db:
+            if config is not None:
+                db.execute("UPDATE content_monitors SET config_json=? WHERE id=?",
+                           (json.dumps(config, ensure_ascii=False), monitor_id))
+            if next_run_at is not None:
+                db.execute("UPDATE content_monitors SET next_run_at=? WHERE id=?",
+                           (next_run_at, monitor_id))
+            if enabled is not None:
+                db.execute("UPDATE content_monitors SET enabled=? WHERE id=?",
+                           (1 if enabled else 0, monitor_id))
+            if status is not None:
+                db.execute("UPDATE content_monitors SET last_run_at=?,last_status=? WHERE id=?",
+                           (datetime.now(timezone.utc).isoformat(), str(status)[:500], monitor_id))
+
+    def record_content_monitor_item(self, monitor_id, item_key):
+        with self.connect() as db:
+            cursor = db.execute("INSERT OR IGNORE INTO content_monitor_items(monitor_id,item_key,seen_at) VALUES(?,?,?)",
+                                (monitor_id, str(item_key), datetime.now(timezone.utc).isoformat()))
+            return cursor.rowcount == 1
+
+    def remove_content_monitor(self, monitor_id):
+        with self.connect() as db:
+            row = db.execute("SELECT case_id,kind FROM content_monitors WHERE id=?",
+                             (monitor_id,)).fetchone()
+            if row is None:
+                return False
+            db.execute("DELETE FROM content_monitor_items WHERE monitor_id=?", (monitor_id,))
+            db.execute("DELETE FROM content_monitors WHERE id=?", (monitor_id,))
+        self.append_event(row["case_id"], {"action": "content_monitor_removed",
+                                           "monitor_id": monitor_id, "kind": row["kind"]})
+        return True
 
     def _vault_configured(self):
         with self.connect() as db:
