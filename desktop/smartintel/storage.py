@@ -27,6 +27,7 @@ class Store:
             db.executescript("""
                 CREATE TABLE IF NOT EXISTS cases(id TEXT PRIMARY KEY,name TEXT NOT NULL,description TEXT DEFAULT '',created_at TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS evidence(id TEXT PRIMARY KEY,case_id TEXT NOT NULL,source TEXT,title TEXT,url TEXT,content TEXT,observed_at TEXT,confidence TEXT,kind TEXT,FOREIGN KEY(case_id) REFERENCES cases(id));
+                CREATE TABLE IF NOT EXISTS vault_settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS vault_attachments(id TEXT PRIMARY KEY,case_id TEXT NOT NULL,filename TEXT NOT NULL,kind TEXT NOT NULL,path TEXT NOT NULL,size INTEGER NOT NULL,sha256 TEXT NOT NULL,ciphertext_sha256 TEXT NOT NULL,created_at TEXT NOT NULL,FOREIGN KEY(case_id) REFERENCES cases(id));
                 CREATE TABLE IF NOT EXISTS audit_events(seq INTEGER PRIMARY KEY AUTOINCREMENT,case_id TEXT,created_at TEXT NOT NULL,event_json TEXT NOT NULL,previous_hash TEXT NOT NULL,event_hash TEXT NOT NULL);
                 CREATE INDEX IF NOT EXISTS idx_evidence_case ON evidence(case_id);
@@ -47,10 +48,15 @@ class Store:
         with self.connect() as db:
             return [dict(r) for r in db.execute('SELECT * FROM cases ORDER BY created_at DESC')]
 
-    @staticmethod
-    def _encode_content(content):
-        if not secure_vault.vault_enabled():
+    def _vault_configured(self):
+        with self.connect() as db:
+            row = db.execute("SELECT value FROM vault_settings WHERE key='enabled'").fetchone()
+        return bool(row and row["value"] == "1")
+
+    def _encode_content(self, content):
+        if not self._vault_configured():
             return content
+        # Fail closed if the OS credential store is unavailable or the key was lost.
         token = secure_vault.encrypt((content or "").encode("utf-8"))
         return "SIENC1:" + base64.b64encode(token).decode("ascii")
 
@@ -85,10 +91,14 @@ class Store:
                     token = secure_vault.encrypt(value.encode("utf-8"))
                     db.execute("UPDATE evidence SET content=? WHERE id=?",
                                ("SIENC1:" + base64.b64encode(token).decode("ascii"), row["id"]))
+            db.execute("INSERT OR REPLACE INTO vault_settings(key,value) VALUES('enabled','1')")
         self.append_event(None, {"action":"evidence_payload_encryption_enabled","scope":"all_cases"})
 
     def vault_status(self):
-        return {"enabled": secure_vault.vault_enabled(), "scope":"evidence content and attachment payloads; case metadata remains plaintext"}
+        configured = self._vault_configured()
+        key_available = secure_vault.vault_enabled() if configured else False
+        return {"enabled": configured, "unlocked": key_available, "locked": configured and not key_available,
+                "scope":"evidence content and attachment payloads; case metadata remains plaintext"}
 
     def add_attachment(self, case_id, source_path, kind="attachment"):
         row = secure_vault.import_attachment(APP_DIR, case_id, source_path, kind=kind)
