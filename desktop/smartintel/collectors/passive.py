@@ -90,7 +90,7 @@ def _semantic_identifiers(soup):
 
 
 def _get_public_pinned(url):
-    """Fetch via the validated IP while preserving HTTP Host and TLS SNI."""
+    """Try every validated public IP while preserving Host and TLS SNI."""
     import urllib3
     from urllib3.util import Timeout
     from requests import Response
@@ -102,37 +102,42 @@ def _get_public_pinned(url):
         addresses = _resolve_public_addresses(parsed.hostname, port)
     except (socket.gaierror, ValueError) as exc:
         raise ValueError(f"Could not resolve a public host: {exc}") from exc
-    pinned_ip = addresses[0]
     headers = {**HEADERS, "Host": parsed.hostname}
     path = parsed.path or "/"
     if parsed.query:
         path += "?" + parsed.query
     timeout = Timeout(total=REQUEST_TIMEOUT, connect=REQUEST_TIMEOUT, read=REQUEST_TIMEOUT)
-    pool = None
-    try:
-        if parsed.scheme == "https":
-            pool = urllib3.HTTPSConnectionPool(
-                pinned_ip, port=port, maxsize=1, block=True,
-                cert_reqs="CERT_REQUIRED", ca_certs=requests.certs.where(),
-                server_hostname=parsed.hostname, assert_hostname=parsed.hostname,
-            )
-        else:
-            pool = urllib3.HTTPConnectionPool(pinned_ip, port=port, maxsize=1, block=True)
-        result = pool.request("GET", path, headers=headers, timeout=timeout,
-                              preload_content=False, redirect=False, retries=False)
-        response = Response()
-        response.status_code = result.status
-        response.reason = result.reason
-        response.headers = CaseInsensitiveDict(result.headers)
-        response.url = url
-        response.encoding = requests.utils.get_encoding_from_headers(response.headers)
-        response._content = result.read(MAX_PAGE_BYTES + 1, decode_content=True)
-        response._content_consumed = True
-        result.release_conn()
-        return response
-    finally:
-        if pool is not None:
-            pool.close()
+    errors = []
+    for pinned_ip in addresses:
+        pool = None
+        try:
+            if parsed.scheme == "https":
+                pool = urllib3.HTTPSConnectionPool(
+                    pinned_ip, port=port, maxsize=1, block=True,
+                    cert_reqs="CERT_REQUIRED", ca_certs=requests.certs.where(),
+                    server_hostname=parsed.hostname, assert_hostname=parsed.hostname,
+                )
+            else:
+                pool = urllib3.HTTPConnectionPool(pinned_ip, port=port, maxsize=1, block=True)
+            result = pool.request("GET", path, headers=headers, timeout=timeout,
+                                  preload_content=False, redirect=False, retries=False)
+            response = Response()
+            response.status_code = result.status
+            response.reason = result.reason
+            response.headers = CaseInsensitiveDict(result.headers)
+            response.url = url
+            response.encoding = requests.utils.get_encoding_from_headers(response.headers)
+            response._content = result.read(MAX_PAGE_BYTES + 1, decode_content=True)
+            response._content_consumed = True
+            result.release_conn()
+            return response
+        except Exception as exc:
+            errors.append(f"{pinned_ip}: {exc.__class__.__name__}: {str(exc)[:180]}")
+        finally:
+            if pool is not None:
+                pool.close()
+    raise ConnectionError("All validated public IP addresses failed: " + " | ".join(errors))
+
 
 def collect_website(url):
     url=url.strip()
