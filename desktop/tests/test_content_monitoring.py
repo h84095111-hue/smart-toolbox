@@ -126,3 +126,13 @@ def test_content_monitor_persistence_and_telegram_single_cursor(tmp_path):
     with pytest.raises(ValueError, match="one Telegram monitor"):
         store.create_content_monitor(case_id, "telegram_channels",
                                      {"channels": ["@channel_two"]}, 3600, user)
+
+def test_public_feed_monitor_rejects_secret_query_parameters():
+    with pytest.raises(ValueError, match="must not embed authentication"):
+        social_monitor.monitor_rss_feed("https://example.org/feed.xml?access_token=secret")
+
+
+def test_onion_monitor_rejects_secret_query_parameters():
+    url = "http://" + ("a" * 56) + ".onion/public?token=secret"
+    with pytest.raises(ValueError, match="must not embed authentication"):
+        darkweb_monitor.fetch_onion_page(url)
