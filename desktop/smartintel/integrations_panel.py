@@ -4,7 +4,7 @@ from PyQt6.QtCore import QThread,pyqtSignal
 from PyQt6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QLabel,QComboBox,QLineEdit,QPushButton,QPlainTextEdit,QMessageBox,QDialog,QTableWidget,QTableWidgetItem,QHeaderView
 from .collectors import passive_sources as src
 from .collectors.all_in_one import run_all
-from .identity_checks import check_identity
+from .workflow import run_identity_workflow
 from .source_catalog import list_sources
 
 class _Task(QThread):
@@ -66,12 +66,19 @@ class IntegrationsPanel(QWidget):
         options={"max_sites":int(self.site_limit.currentData())} if kind=="username" else ({"default_region":"MY"} if kind=="phone" else {})
         self.set_busy(True)
         self.output.setPlainText(f"NO-API {kind.upper()} CHECK\\nTarget: {value}\\n\\nRunning local/public-source checks…")
-        self.task=_Task(lambda: check_identity(kind,value,**options))
+        self.task=_Task(lambda: run_identity_workflow(kind,value,**options))
         self.task.done.connect(self.identity_complete)
         self.task.failed.connect(self.fail)
         self.task.finished.connect(lambda:self.set_busy(False))
         self.task.start()
-    def identity_complete(self,result):
+    def identity_complete(self,workflow_result):
+        self.workflow_ready.emit(workflow_result)
+        result=workflow_result.get("result",{})
+        if not result:
+            self.output.setPlainText("Identity workflow did not return a result.\\n"+json.dumps(workflow_result.get("failures",[]),indent=2))
+            self.latest=None
+            self.add_button.setEnabled(False)
+            return
         lines=[f"IDENTITY CHECK — {result.get('identifier_type',result.get('tool',''))}",
                f"Status: {result.get('status','unknown')}"]
         if result.get("tool"):
