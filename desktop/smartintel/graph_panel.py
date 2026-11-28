@@ -75,9 +75,9 @@ class IdentityGraphPanel(QWidget):
         editor=QHBoxLayout()
         self.add_kind=QComboBox(); self.add_kind.addItems(["username","email","phone","profile_or_url"])
         self.add_value=QLineEdit(); self.add_value.setPlaceholderText("Add a manually verified lead")
-        add_lead=QPushButton("Add lead"); add_lead.clicked.connect(self.add_manual_lead)
+        add_lead=QPushButton("Add lead"); add_lead.clicked.connect(self.add_manual_lead); self.add_lead_button=add_lead
         self.alias_from=QComboBox(); self.alias_to=QComboBox()
-        merge=QPushButton("Merge alias → canonical"); merge.clicked.connect(self.merge_alias)
+        merge=QPushButton("Merge alias → canonical"); merge.clicked.connect(self.merge_alias); self.merge_button=merge
         for control in (self.add_kind,self.add_value,add_lead,self.alias_from,self.alias_to,merge): editor.addWidget(control)
         root.addLayout(editor)
         self.debounce=QTimer(self); self.debounce.setSingleShot(True); self.debounce.setInterval(250); self.debounce.timeout.connect(self.render_graph)
