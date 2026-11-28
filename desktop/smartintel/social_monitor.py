@@ -75,6 +75,7 @@ def monitor_mastodon_account(account: str, *, keywords: list[str] | None = None,
     if parsed.scheme:
         if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
             raise ValueError("Mastodon profile URLs must be public HTTPS URLs.")
+        _reject_secret_query(parsed)
         host = parsed.hostname
         match = re.search(r"/@([A-Za-z0-9_.-]+)", parsed.path)
         if not match:
