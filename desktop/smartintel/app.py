@@ -19,6 +19,7 @@ from .browser_capture import capture_public_screenshot
 from .image_intel import inspect_image, compare_images
 from .signing import signed_export, verify_signed_export
 from .monitoring_panel import MonitoringPanel
+from .network import proxy_label, validate_proxy_url
 
 STYLE="""QWidget{background:#0a1020;color:#e7ecf7;font-family:Segoe UI,Inter,Arial;font-size:13px;selection-background-color:#6558df;selection-color:#fff}
 QMainWindow,QDialog{background:#0a1020}
@@ -69,9 +70,10 @@ class SettingsDialog(QDialog):
         v=QVBoxLayout(self); v.addWidget(QLabel("API keys are saved in your OS credential store using keyring."))
         self.fields={}
         for p in ("OpenAI","Gemini","Claude","virustotal","abuseipdb","otx","shodan","censys","securitytrails","misp","hibp","opencorporates","courtlistener","opensanctions","network_proxy"):
-            v.addWidget(QLabel(({"virustotal":"VirusTotal","abuseipdb":"AbuseIPDB","otx":"AlienVault OTX","shodan":"Shodan","censys":"Censys","securitytrails":"SecurityTrails","misp":"MISP","hibp":"Have I Been Pwned","opencorporates":"OpenCorporates","courtlistener":"CourtListener","opensanctions":"OpenSanctions","network_proxy":"HTTP / Tor SOCKS5 proxy URL"}).get(p,p)+" API key")); row=QHBoxLayout(); e=QLineEdit(); e.setEchoMode(QLineEdit.EchoMode.Password); e.setText(get_api_key(p) or ""); row.addWidget(e)
+            label=({"virustotal":"VirusTotal","abuseipdb":"AbuseIPDB","otx":"AlienVault OTX","shodan":"Shodan","censys":"Censys","securitytrails":"SecurityTrails","misp":"MISP","hibp":"Have I Been Pwned","opencorporates":"OpenCorporates","courtlistener":"CourtListener","opensanctions":"OpenSanctions","network_proxy":"HTTP / Tor SOCKS5 proxy URL"}).get(p,p)
+            v.addWidget(QLabel(label if p=="network_proxy" else label+" API key")); row=QHBoxLayout(); e=QLineEdit(); e.setEchoMode(QLineEdit.EchoMode.Password); e.setText(get_api_key(p) or ""); row.addWidget(e)
             clear=QPushButton("Clear"); clear.clicked.connect(lambda _,provider=p,field=e:self.clear(provider,field)); row.addWidget(clear); v.addLayout(row); self.fields[p]=e
-        note=QLabel("AI and OSINT provider usage may be billed separately. Keys are stored in your OS credential store."); note.setObjectName("muted"); v.addWidget(note)
+        note=QLabel("Keys are stored in your OS credential store. Proxy routing is opt-in; for Tor use a running local SOCKS5 listener (commonly 127.0.0.1:9050). Smart Intel does not start Tor or manage VPN software. Proxy routing is not anonymity."); note.setObjectName("muted"); v.addWidget(note)
         save=QPushButton("Save keys"); save.setObjectName("primary"); save.clicked.connect(self.save); v.addWidget(save)
     def clear(self,p,e):
         try:delete_api_key(p)
@@ -79,9 +81,11 @@ class SettingsDialog(QDialog):
         e.clear()
     def save(self):
         try:
+            if self.fields.get("network_proxy") and self.fields["network_proxy"].text().strip():
+                validate_proxy_url(self.fields["network_proxy"].text())
             for p,e in self.fields.items():
                 if e.text().strip():save_api_key(p,e.text())
-            QMessageBox.information(self,"Saved","API keys saved to the OS credential store."); self.accept()
+            QMessageBox.information(self,"Saved","API keys and network route settings saved to the OS credential store."); self.accept()
         except Exception as e:QMessageBox.critical(self,"Key storage error",str(e))
 
 class MainWindow(QMainWindow):
@@ -102,6 +106,7 @@ class MainWindow(QMainWindow):
         share=QPushButton("↗  Share active case"); share.clicked.connect(self.share_case); sv.addWidget(share)
         settings=QPushButton("⚙  AI & network settings"); settings.clicked.connect(lambda:SettingsDialog(self).exec()); sv.addWidget(settings)
         privacy=QLabel("● PASSIVE PUBLIC-SOURCE MODE\nNo login attempts · No exploitation\nEvidence stored locally"); privacy.setStyleSheet("color:#8fe0bd;background:#142b30;border:1px solid #28534f;border-radius:8px;padding:12px;font-size:11px"); sv.addWidget(privacy)
+        self.network_route_label=QLabel("Network route: "+proxy_label()+"\nVPN is controlled by your operating system."); self.network_route_label.setWordWrap(True); self.network_route_label.setObjectName("muted"); sv.addWidget(self.network_route_label)
         row.addWidget(side)
         main=QWidget(); mv=QVBoxLayout(main); mv.setContentsMargins(25,20,25,18)
         top=QHBoxLayout(); eyebrow=QLabel("INTELLIGENCE WORKSPACE"); eyebrow.setObjectName("eyebrow"); top.addWidget(eyebrow); top.addStretch()
