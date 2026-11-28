@@ -30,7 +30,7 @@ class IntegrationsPanel(QWidget):
         self.identity_type.currentTextChanged.connect(lambda kind: self.site_limit.setEnabled(kind=="Username"))
         self.identity_button=QPushButton("🔎  No-API Identity Check"); self.identity_button.clicked.connect(self.run_identity_check); identity_row.addWidget(self.identity_button,2)
         v.addLayout(identity_row)
-        row2=QHBoxLayout(); self.source=QComboBox(); self.source.addItems(["Certificate transparency (crt.sh)","Wayback Machine","VirusTotal domain","AbuseIPDB public IP","urlscan.io domain","AlienVault OTX domain","Shodan existing IP data","Censys existing IP data","SecurityTrails passive DNS","GDELT public news","Public username reference links","Authorized breach-check workflow","MISP exact IOC search"]); row2.addWidget(self.source,2)
+        row2=QHBoxLayout(); self.source=QComboBox(); self.source.addItems(["Certificate transparency (crt.sh)","Wayback Machine","VirusTotal domain","AbuseIPDB public IP","urlscan.io domain","AlienVault OTX domain","Shodan existing IP data","Censys existing IP data","SecurityTrails passive DNS","GDELT public news","Public username reference links","Authorized breach-check workflow","MISP exact IOC search","Have I Been Pwned email lookup","OpenCorporates company search","CourtListener opinion search","OpenSanctions candidate search"]); row2.addWidget(self.source,2)
         self.misp=QLineEdit(); self.misp.setPlaceholderText("Optional MISP HTTPS base URL"); row2.addWidget(self.misp,2)
         self.run_button=QPushButton("Run selected source"); self.run_button.clicked.connect(self.run_lookup); row2.addWidget(self.run_button); catalogue=QPushButton("Source catalogue"); catalogue.clicked.connect(self.show_catalogue); row2.addWidget(catalogue); v.addLayout(row2)
         self.output=QPlainTextEdit(); self.output.setReadOnly(True); self.output.setPlaceholderText("Scan progress, source status and findings appear here…"); v.addWidget(self.output,1)
@@ -151,6 +151,10 @@ class IntegrationsPanel(QWidget):
             "Public username reference links":"public_username_reference",
             "Authorized breach-check workflow":"email_authorized_check_guidance",
             "MISP exact IOC search":"misp_exact_ioc",
+            "Have I Been Pwned email lookup":"hibp",
+            "OpenCorporates company search":"opencorporates",
+            "CourtListener opinion search":"courtlistener",
+            "OpenSanctions candidate search":"opensanctions",
         }
         source_id=source_ids[self.source.currentText()]
         self.set_busy(True); self.output.setPlainText("Selected source workflow running…")
