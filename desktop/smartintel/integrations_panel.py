@@ -1,4 +1,5 @@
 """PyQt6 UI for individual and all-in-one passive OSINT collection."""
+import json
 from PyQt6.QtCore import QThread,pyqtSignal
 from PyQt6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QLabel,QComboBox,QLineEdit,QPushButton,QPlainTextEdit,QMessageBox
 from .collectors import passive_sources as src
@@ -87,6 +88,13 @@ class IntegrationsPanel(QWidget):
             lines.extend(["","PIVOT CANDIDATES — analyst approval required"])
             for pivot in pivots:
                 lines.append(f"[PENDING] {pivot['username']} — {pivot['url']}")
+        # Persist email, phone and profile metadata checks as case evidence.
+        if result.get("identifier_type") in {"email","phone","profile_url"}:
+            evidence_payload={k:v for k,v in result.items() if k not in {"stdout_tail","stderr_tail"}}
+            self.finding_ready.emit({"title":"Identity check — "+str(result.get("identifier_type")),
+                "content":json.dumps(evidence_payload,ensure_ascii=False,indent=2,default=str),
+                "source":"Smart Intel identity checks","url":result.get("url",""),
+                "confidence":"Low","kind":"Identity validation observation"})
         findings=result.get("findings",[])
         lines.extend(["",f"Candidate profiles: {len(findings)}"])
         for item in findings:
