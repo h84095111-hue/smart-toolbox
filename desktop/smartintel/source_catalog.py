@@ -47,7 +47,7 @@ SOURCE_CATALOG: tuple[SourceDescriptor, ...] = (
     SourceDescriptor("censys", "Censys", "ip_metadata", "authenticated_api", ("SMART_INTEL_CENSYS_API_KEY",), "implemented", "Existing host metadata only"),
     SourceDescriptor("hibp", "Have I Been Pwned", "breach_notification", "authenticated_api", ("SMART_INTEL_HIBP_API_KEY",), "implemented", "Exact analyst-requested email breach metadata; requires a valid subscription key; no credential dumps"),
     SourceDescriptor("opencorporates", "OpenCorporates", "corporate_records", "authenticated_api", ("SMART_INTEL_OPENCORPORATES_API_KEY",), "implemented", "API token and applicable provider terms required"),
-    SourceDescriptor("opensanctions", "OpenSanctions", "sanctions_pep", "authenticated_api", ("SMART_INTEL_OPENSANCTIONS_API_KEY",), "implemented", "Candidate search only; verify identity and licensing before use"),
+    SourceDescriptor("opensanctions", "OpenSanctions", "sanctions_pep", "authenticated_api", ("SMART_INTEL_OPENSANCTIONS_API_KEY",), "implemented", "POST /match query-by-example; name-only candidates require human review; business licensing may apply"),
     SourceDescriptor("company_house", "UK Companies House", "corporate_records", "authenticated_api", ("COMPANIES_HOUSE_API_KEY",)),
     SourceDescriptor("sec_edgar", "SEC EDGAR", "corporate_filings", "public_api"),
     SourceDescriptor("gleif", "GLEIF LEI", "corporate_records", "public_api"),
