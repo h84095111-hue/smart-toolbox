@@ -22,7 +22,7 @@ python -m pytest -q
 ## Current desktop features
 
 - Dark-first PyQt6 interface, local SQLite investigation cases and evidence table.
-- One-click All-in-One Passive Scan for domains, public IPs and URLs; automatically selects relevant passive sources and records per-provider failures/skips.
+- One-click All-in-One Passive Scan runs through the shared workflow engine, catalogue-backed collector registry and adapter manager; it selects relevant passive sources by target type and records per-provider failures/skips.\n- Source catalogue dialog in the OSINT Sources panel distinguishes implemented connectors from planned, licensed and manual entries; implemented API credential environment names use the `SMART_INTEL_*` convention.\n- Public website and domain TLS fetches pin the validated public DNS address to the TCP connection while preserving the original Host header and TLS SNI; redirects are not followed.
 - Passive DNS/RDAP/TLS and public website metadata.
 - OSINT Sources panel: crt.sh, Wayback, VirusTotal, AbuseIPDB, urlscan.io, OTX, Shodan/Censys existing host metadata, SecurityTrails passive DNS, GDELT, MISP exact IOC search, public username reference links and authorized breach-check guidance.
 - Interactive per-case identity/evidence graph with source-to-identifier provenance; graph nodes are leads, not identity verification.
