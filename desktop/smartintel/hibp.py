@@ -7,6 +7,7 @@ A valid subscription API key and an identifiable User-Agent are required.
 from __future__ import annotations
 
 import re
+import json
 from urllib.parse import quote
 
 import requests
@@ -65,13 +66,21 @@ def check_email_breaches(email: str, *, timeout: float = 15.0) -> dict:
             "is_verified": item.get("IsVerified"),
             "is_sensitive": item.get("IsSensitive"),
         })
-    return {
+    details = {
         "status": "matches_found" if safe else "no_disclosable_matches",
-        "identifier_type": "email",
         "email": value,
-        "source": "Have I Been Pwned API v3",
-        "source_url": endpoint,\n        "attribution": "Data from Have I Been Pwned",\n        "attribution_url": "https://haveibeenpwned.com/",
         "breach_count": len(safe),
         "breaches": safe,
+        "data_attribution": "Data from Have I Been Pwned (https://haveibeenpwned.com/), licensed under CC BY 4.0.",
+        "api_endpoint": endpoint,
         "limitations": "This is a breach-notification result, not evidence that a mailbox is currently accessible or that the subject controls it. The API returns breach metadata only; no passwords or stolen credential records are retrieved. Use only for an email address you are authorized to assess.",
+    }
+    return {
+        "title": "Have I Been Pwned breach metadata",
+        "content": json.dumps(details, ensure_ascii=False, indent=2),
+        "source": "Have I Been Pwned",
+        "url": "https://haveibeenpwned.com/",
+        "confidence": "Low",
+        "kind": "Email breach notification metadata",
+        **details,
     }
