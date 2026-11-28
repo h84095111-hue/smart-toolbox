@@ -256,7 +256,7 @@ class MainWindow(QMainWindow):
         handle=tempfile.NamedTemporaryFile(prefix="smartintel-shot-",suffix=".png",delete=False)
         self.screenshot_temp=Path(handle.name); handle.close()
         self.status.setText("Capturing public browser screenshot…")
-        self.worker=Worker(capture_public_screenshot,url.strip(),self.screenshot_temp,full_page=True)
+        self.worker=Worker(lambda: capture_public_screenshot(url.strip(),self.screenshot_temp,full_page=True))
         self.worker.done.connect(self.screenshot_done)
         self.worker.failed.connect(self.screenshot_failed)
         self.worker.start()
