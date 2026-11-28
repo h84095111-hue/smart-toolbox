@@ -10,7 +10,7 @@ from .providers.ai import analyze, save_api_key, get_api_key, delete_api_key
 from .integrations_panel import IntegrationsPanel
 from .graph_panel import IdentityGraphPanel
 from .evidence_integrity import append_audit, verify_audit
-from .secure_vault import make_warc_record
+from .secure_vault import make_warc_record, make_warc_response
 import tempfile
 from .exports import export_json, export_csv, export_stix, export_pdf, export_docx
 from .config import APP_DIR
@@ -141,6 +141,7 @@ class MainWindow(QMainWindow):
         import_file=QPushButton("Import attachment"); import_file.clicked.connect(lambda:self.import_attachment("attachment")); vault_buttons.addWidget(import_file)
         import_image=QPushButton("Import screenshot"); import_image.clicked.connect(lambda:self.import_attachment("screenshot")); vault_buttons.addWidget(import_image)
         archive=QPushButton("Create WARC from file"); archive.clicked.connect(self.archive_as_warc); vault_buttons.addWidget(archive)
+        capture=QPushButton("Capture public URL to WARC"); capture.clicked.connect(self.capture_url_warc); vault_buttons.addWidget(capture)
         export_attachment=QPushButton("Export selected"); export_attachment.clicked.connect(self.export_attachment); vault_buttons.addWidget(export_attachment)
         vault_layout.addLayout(vault_buttons)
         self.attach_table=QTableWidget(0,5); self.attach_table.setHorizontalHeaderLabels(["Filename","Type","Size","SHA-256","Added UTC"])
@@ -266,6 +267,21 @@ class MainWindow(QMainWindow):
             append_audit(APP_DIR/"audit.jsonl",{"action":"warc_imported","case_id":self.case_id,"attachment_id":row["id"],"source_filename":Path(source).name,"sha256":row["sha256"]})
             self.refresh_attachments(); self.status.setText("Encrypted WARC resource record created")
         except Exception as exc: QMessageBox.critical(self,"WARC creation failed",str(exc))
+    def capture_url_warc(self):
+        if not self.require_case(): return
+        url,ok=QInputDialog.getText(self,"Capture public URL","HTTP or HTTPS URL (one response; redirects are not followed):")
+        if not ok or not url.strip(): return
+        try:
+            if not self.store.vault_status()["enabled"]:
+                QMessageBox.information(self,"Enable encryption","Enable evidence encryption before creating WARC records."); return
+            record=make_warc_response(url.strip())
+            with tempfile.NamedTemporaryFile(prefix="smartintel-response-",suffix=".warc",delete=False) as handle:
+                handle.write(record); temp_path=Path(handle.name)
+            try: row=self.store.add_attachment(self.case_id,temp_path,kind="warc_response")
+            finally: temp_path.unlink(missing_ok=True)
+            append_audit(APP_DIR/"audit.jsonl",{"action":"url_warc_captured","case_id":self.case_id,"attachment_id":row["id"],"url":url.strip(),"sha256":row["sha256"]})
+            self.refresh_attachments(); self.status.setText("Public HTTP response captured to encrypted WARC")
+        except Exception as exc: QMessageBox.critical(self,"WARC capture failed",str(exc))
     def export_attachment(self):
         rows=self.attach_table.selectionModel().selectedRows() if hasattr(self,"attach_table") else []
         if not rows: QMessageBox.information(self,"Select attachment","Select an attachment first."); return
