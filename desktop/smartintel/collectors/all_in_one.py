@@ -88,7 +88,7 @@ def build_registry(*, misp_url: str = "", adapter_manager: AdapterManager | None
     return registry
 
 
-def run_all(target, misp_url=""):
+def run_all(target, misp_url="", cancellation=None):
     raw = (target or "").strip()
     if not raw:
         raise ValueError("Enter a domain, public IP address, email, username or website URL.")
@@ -105,6 +105,7 @@ def run_all(target, misp_url=""):
         context={"original_target": raw, "target_type": target_type},
         target_type=target_type,
         policy=ExecutionPolicy(max_workers=6, timeout_seconds=60.0, allow_active=False),
+        cancellation=cancellation,
     )
     failures = []
     skipped = [f"{row['collector']}: {row['reason']}" for row in result["skipped"]]
@@ -129,7 +130,7 @@ def run_all(target, misp_url=""):
         "skipped": skipped, "events": result["events"], "status": result["status"],
     }
 
-def run_selected(target, source_id, misp_url=""):
+def run_selected(target, source_id, misp_url="", cancellation=None):
     """Execute one catalogue-backed source through the shared workflow."""
     raw = (target or "").strip()
     if not raw:
@@ -150,6 +151,7 @@ def run_selected(target, source_id, misp_url=""):
         target_type=target_type,
         selected=(source_id,),
         policy=ExecutionPolicy(max_workers=1, timeout_seconds=45.0, allow_active=False),
+        cancellation=cancellation,
     )
     return {
         "run_id": result["run_id"], "target": raw, "findings": result["findings"],
