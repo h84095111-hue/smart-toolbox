@@ -24,8 +24,9 @@ def get_database_key() -> str | None:
         return None
 
 
-def database_encryption_enabled() -> bool:
-    return bool(get_database_key())
+def database_encryption_enabled(path: str | Path | None = None) -> bool:
+    marker = Path(str(path) + ".sqlcipher-required") if path is not None else None
+    return bool(get_database_key()) or bool(marker and marker.exists())
 
 
 def _sqlcipher():
@@ -62,7 +63,7 @@ def encrypt_database(path: str | Path) -> dict:
     database = Path(path)
     if not database.is_file():
         raise FileNotFoundError(database)
-    if database_encryption_enabled():
+    if database_encryption_enabled(database):
         raise RuntimeError("This database already has a SQLCipher key configured.")
     driver = _sqlcipher()
     import sqlite3
@@ -99,12 +100,20 @@ def encrypt_database(path: str | Path) -> dict:
         verify.close()
 
     import keyring
-    keyring.set_password(SERVICE, ACCOUNT, key)
+    marker = Path(str(database) + ".sqlcipher-required")
+    marker_tmp = marker.with_suffix(marker.suffix + ".tmp")
+    marker_tmp.write_text("SQLCipher is required to open this database. Do not remove this marker.\\n", encoding="utf-8")
     try:
+        os.chmod(marker_tmp, 0o600)
+        keyring.set_password(SERVICE, ACCOUNT, key)
+        marker_tmp.replace(marker)
         shutil.copy2(database, backup)
         os.replace(temporary, database)
     except Exception:
+        marker_tmp.unlink(missing_ok=True)
         try:
+            if marker.exists():
+                marker.unlink()
             keyring.delete_password(SERVICE, ACCOUNT)
         except Exception:
             pass
