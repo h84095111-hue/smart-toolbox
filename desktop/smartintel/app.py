@@ -281,7 +281,7 @@ class MainWindow(QMainWindow):
         writable=role in {"owner","analyst"}
         self.collect_btn.setEnabled(writable); self.all_scan_btn.setEnabled(writable)
         self.integrations.all_button.setEnabled(writable); self.integrations.run_button.setEnabled(writable); self.integrations.identity_button.setEnabled(writable)
-        self.graph_panel.add_lead_button.setEnabled(writable); self.graph_panel.merge_button.setEnabled(writable)
+        self.graph_panel.add_lead_button.setEnabled(writable); self.graph_panel.merge_button.setEnabled(writable); self.graph_panel.undo_button.setEnabled(writable)
         self.new_case_button.setEnabled(bool(self.current_user and self.current_user.get("role") in {"admin","analyst"}))
         self.refresh_evidence(); self.refresh_attachments(); self.graph_panel.set_case(self.case_id); self.monitoring_panel.set_case(self.case_id)
     def collect(self):
