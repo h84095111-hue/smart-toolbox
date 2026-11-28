@@ -11,22 +11,34 @@ import os
 from pathlib import Path
 import shutil
 import secrets
+import hashlib
 
 SERVICE = "smart-intel"
 ACCOUNT = "sqlcipher_database_key"
 
 
-def get_database_key() -> str | None:
+def _account_for(path: str | Path) -> str:
+    identity = str(Path(path).expanduser().resolve()).encode("utf-8")
+    return ACCOUNT + ":" + hashlib.sha256(identity).hexdigest()[:32]
+
+
+def get_database_key(path: str | Path | None = None) -> str | None:
     try:
         import keyring
-        return keyring.get_password(SERVICE, ACCOUNT)
+        if path is None:
+            from .config import DB_PATH
+            path = DB_PATH
+        return keyring.get_password(SERVICE, _account_for(path))
     except Exception:
         return None
 
 
 def database_encryption_enabled(path: str | Path | None = None) -> bool:
-    marker = Path(str(path) + ".sqlcipher-required") if path is not None else None
-    return bool(get_database_key()) or bool(marker and marker.exists())
+    if path is None:
+        from .config import DB_PATH
+        path = DB_PATH
+    marker = Path(str(path) + ".sqlcipher-required")
+    return bool(get_database_key(path)) or marker.exists()
 
 
 def _sqlcipher():
@@ -38,7 +50,7 @@ def _sqlcipher():
 
 
 def encrypted_connect(path: str | Path):
-    key = get_database_key()
+    key = get_database_key(path)
     if not key:
         raise RuntimeError("SQLCipher key is not available in the OS credential store.")
     driver = _sqlcipher()
@@ -109,7 +121,7 @@ def encrypt_database(path: str | Path) -> dict:
     marker_tmp.write_text("SQLCipher is required to open this database. Do not remove this marker.\\n", encoding="utf-8")
     try:
         os.chmod(marker_tmp, 0o600)
-        keyring.set_password(SERVICE, ACCOUNT, key)
+        keyring.set_password(SERVICE, _account_for(database), key)
         marker_tmp.replace(marker)
         shutil.copy2(database, backup)
         os.replace(temporary, database)
@@ -118,7 +130,7 @@ def encrypt_database(path: str | Path) -> dict:
         try:
             if marker.exists():
                 marker.unlink()
-            keyring.delete_password(SERVICE, ACCOUNT)
+            keyring.delete_password(SERVICE, _account_for(database))
         except Exception:
             pass
         temporary.unlink(missing_ok=True)
