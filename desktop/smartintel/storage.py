@@ -82,6 +82,8 @@ class Store:
         return [Evidence(**row) for row in rows]
 
     def enable_evidence_encryption(self):
+        if self._vault_configured() and not secure_vault.vault_enabled():
+            raise RuntimeError("Vault key is unavailable. Refusing to generate a replacement key because existing evidence would become unrecoverable.")
         secure_vault.enable_vault()
         with self.connect() as db:
             rows = db.execute("SELECT id,content FROM evidence").fetchall()
