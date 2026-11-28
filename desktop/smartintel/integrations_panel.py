@@ -4,7 +4,8 @@ from PyQt6.QtCore import QThread,pyqtSignal
 from PyQt6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QLabel,QComboBox,QLineEdit,QPushButton,QPlainTextEdit,QMessageBox,QDialog,QTableWidget,QTableWidgetItem,QHeaderView
 from .collectors import passive_sources as src
 from .collectors.all_in_one import run_all
-from .identity_checks import check_identity\nfrom .source_catalog import list_sources
+from .identity_checks import check_identity
+from .source_catalog import list_sources
 
 class _Task(QThread):
     done=pyqtSignal(object); failed=pyqtSignal(str)
