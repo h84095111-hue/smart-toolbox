@@ -155,3 +155,35 @@ def test_signed_export_verifies_and_detects_tampering(tmp_path, monkeypatch):
     assert verified["valid"] is True
     assert verified["attachments"] == [{"id": "file-1", "valid": True}]
     assert len(verified["public_key_sha256"]) == 64
+
+def test_opensanctions_uses_query_by_example_matching_api(monkeypatch):
+    from smartintel import advanced_sources
+    captured = {}
+
+    class Response:
+        def raise_for_status(self):
+            return None
+        def json(self):
+            return {"responses": {"smartintel-query": {
+                "status": 200,
+                "results": [{"id": "entity-1", "caption": "Example Person",
+                             "schema": "Person", "score": 0.82,
+                             "datasets": ["example_sanctions"],
+                             "properties": {"name": ["Example Person"]}}]
+            }}}
+
+    def fake_post(url, **kwargs):
+        captured["url"] = url
+        captured.update(kwargs)
+        return Response()
+
+    monkeypatch.setattr(advanced_sources, "get_api_key", lambda provider: "test-key")
+    monkeypatch.setattr(advanced_sources.requests, "post", fake_post)
+    result = advanced_sources.opensanctions_search("Example Person")
+    assert captured["url"].endswith("/match/default")
+    assert captured["headers"]["Authorization"] == "ApiKey test-key"
+    assert captured["json"]["queries"]["smartintel-query"]["properties"]["name"] == ["Example Person"]
+    assert captured["params"]["topics"] == ["sanction", "sanction.linked", "debarment"]
+    assert result["candidate_count"] == 1
+    assert result["results"][0]["score"] == 0.82
+    assert "not a legal determination" in result["content"]
