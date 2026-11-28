@@ -338,7 +338,9 @@ def check_identity(identifier_type: str, value: str, **options: Any) -> dict[str
         return inspect_email_domain(value, **options)
     if kind == "phone":
         return inspect_phone_number(value, **options)
-    raise ValueError("identifier_type must be username, email or phone")
+    if kind == "profile_url":
+        return fetch_public_profile_metadata(value, **options)
+    raise ValueError("identifier_type must be username, email, phone or profile_url")
 
 
 def _public_profile_url(url: str) -> str:
