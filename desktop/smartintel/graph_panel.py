@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QLabel,QPushButton,
     QGraphicsView,QGraphicsScene,QGraphicsEllipseItem,QGraphicsSimpleTextItem,QGraphicsLineItem,
     QTextBrowser,QSplitter,QMessageBox,QFrame)
 from .identity_graph import build_identity_graph, validate_graph
-from .match_scoring import assess_false_positive_risk
+from .match_scoring import assess_evidence_risk
 from .ai_analysis import analyze_evidence
 
 class _AnalystTask(QThread):
@@ -90,7 +90,7 @@ class IdentityGraphPanel(QWidget):
     def run_analysis(self):
         if not self.graph or not self.evidence:
             QMessageBox.information(self,"No graph","Collect or add evidence to this case first."); return
-        risk=(assess_false_positive_risk()).to_dict()
+        risk=assess_evidence_risk(self.evidence).to_dict()
         question="Analyze this case graph. Identify supported connections, weak leads, contradictions and safe next steps."
         self.analyze_btn.setEnabled(False); self.status.setText("AI analysis running…")
         self.task=_AnalystTask(question,self.graph.to_dict(),risk,self.provider.currentText(),self.evidence)
