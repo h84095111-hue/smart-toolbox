@@ -2,6 +2,7 @@
 import os,json,time,threading
 from urllib.parse import quote
 import requests
+from ..network import requests_proxy_map
 TIMEOUT=15
 UA={"User-Agent":"SmartIntel/2.0 (public research client)"}
 _last={}
@@ -14,7 +15,7 @@ def _get(url,params=None,headers=None,timeout=TIMEOUT):
         delay=max(0.0,next_allowed-now)
         _last[host]=max(now,next_allowed)+1.0
     if delay: time.sleep(delay)
-    r=requests.get(url,params=params,headers={**UA,**(headers or {})},timeout=timeout); r.raise_for_status(); return r
+    r=requests.get(url,params=params,headers={**UA,**(headers or {})},timeout=timeout,proxies=requests_proxy_map(),allow_redirects=False); r.raise_for_status(); return r
 def _key(provider):
     try:
         import keyring
@@ -88,7 +89,7 @@ def misp_search(base_url,value):
     key=_need("misp"); base=base_url.strip().rstrip("/")
     if not base.startswith("https://"): raise ValueError("MISP URL must use HTTPS")
     url=base+"/attributes/restSearch"
-    r=requests.post(url,json={"value":value,"limit":50},headers={**UA,"Authorization":key,"Accept":"application/json"},timeout=20)
+    r=requests.post(url,json={"value":value,"limit":50},headers={**UA,"Authorization":key,"Accept":"application/json"},timeout=20,proxies=requests_proxy_map(),allow_redirects=False)
     r.raise_for_status()
     return _finding("MISP exact IOC matches",r.json(),"User-configured MISP instance",url)
 def gdelt_news(query):
