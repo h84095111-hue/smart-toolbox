@@ -47,27 +47,35 @@ def poll_telegram_channels(config: dict) -> dict:
         offset = int(config.get("offset", 0))
     except (TypeError, ValueError):
         offset = 0
-    params = {"limit": 100, "timeout": 0,
-              "allowed_updates": '["channel_post","edited_channel_post"]'}
-    if offset > 0:
-        params["offset"] = offset
-    endpoint = "https://api.telegram.org/bot" + token + "/getUpdates"
-    try:
-        response = requests.get(endpoint, params=params, headers={
-            "User-Agent": "SmartIntel/2.1 public channel monitor",
-        }, timeout=20, proxies=requests_proxy_map(), allow_redirects=False)
-    except requests.RequestException:
-        # Do not echo the Bot API URL: it contains the secret token.
-        raise RuntimeError("Could not reach the Telegram Bot API through the configured network route.") from None
-    if response.status_code != 200:
-        raise RuntimeError("Telegram Bot API request failed with HTTP " + str(response.status_code) + ".")
-    payload = response.json()
-    if not payload.get("ok"):
-        error = str(payload.get("description", "Telegram returned an API error."))[:220]
-        raise RuntimeError("Telegram Bot API: " + error)
-    updates = payload.get("result", [])
-    if not isinstance(updates, list):
-        raise RuntimeError("Telegram returned an invalid updates list.")
+    all_updates = []
+    current_offset = offset
+    for _batch in range(5):
+        params = {"limit": 100, "timeout": 0,
+                  "allowed_updates": '["channel_post","edited_channel_post"]'}
+        if current_offset > 0:
+            params["offset"] = current_offset
+        endpoint = "https://api.telegram.org/bot" + token + "/getUpdates"
+        try:
+            response = requests.get(endpoint, params=params, headers={
+                "User-Agent": "SmartIntel/2.1 public channel monitor",
+            }, timeout=20, proxies=requests_proxy_map(), allow_redirects=False)
+        except requests.RequestException:
+            # Do not echo the Bot API URL: it contains the secret token.
+            raise RuntimeError("Could not reach the Telegram Bot API through the configured network route.") from None
+        if response.status_code != 200:
+            raise RuntimeError("Telegram Bot API request failed with HTTP " + str(response.status_code) + ".")
+        payload = response.json()
+        if not payload.get("ok"):
+            error = str(payload.get("description", "Telegram returned an API error."))[:220]
+            raise RuntimeError("Telegram Bot API: " + error)
+        batch = payload.get("result", [])
+        if not isinstance(batch, list):
+            raise RuntimeError("Telegram returned an invalid updates list.")
+        all_updates.extend(batch)
+        if len(batch) < 100:
+            break
+        current_offset = max([current_offset] + [int(row.get("update_id", 0)) + 1 for row in batch])
+    updates = all_updates
     next_offset = max([offset] + [int(row.get("update_id", 0)) + 1 for row in updates])
     results = []
     for update in updates:
