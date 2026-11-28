@@ -9,6 +9,16 @@ from .identity_graph import build_identity_graph, validate_graph
 from .match_scoring import assess_evidence_risk
 from .ai_analysis import analyze_evidence
 
+class _GraphView(QGraphicsView):
+    """Mouse-wheel zoom and hand-drag navigation for evidence graphs."""
+    def __init__(self, scene, parent=None):
+        super().__init__(scene, parent)
+        self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+        self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
+    def wheelEvent(self, event):
+        factor = 1.18 if event.angleDelta().y() > 0 else 1 / 1.18
+        self.scale(factor, factor)
+
 class _AnalystTask(QThread):
     done=pyqtSignal(str); failed=pyqtSignal(str)
     def __init__(self,question,graph,risk,provider,evidence):
@@ -41,7 +51,7 @@ class IdentityGraphPanel(QWidget):
         note=QLabel("Nodes are extracted identifiers and source records. Lines mean “observed in this evidence”, not confirmed identity.")
         note.setWordWrap(True); note.setStyleSheet("color:#91a2bd"); root.addWidget(note)
         split=QSplitter(Qt.Orientation.Horizontal)
-        self.scene=QGraphicsScene(self); self.view=QGraphicsView(self.scene)
+        self.scene=QGraphicsScene(self); self.view=_GraphView(self.scene)
         self.view.setMinimumHeight(360); self.view.setStyleSheet("background:#091323;border:1px solid #263650;border-radius:8px")
         split.addWidget(self.view)
         side=QWidget(); sv=QVBoxLayout(side); self.detail=QTextBrowser(); self.detail.setMinimumWidth(270); sv.addWidget(self.detail,1)
