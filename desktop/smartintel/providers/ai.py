@@ -17,7 +17,7 @@ def delete_api_key(provider):
     try: keyring.delete_password('smart-intel',provider.lower())
     except Exception: pass
 
-def analyze(provider,prompt,evidence):
+def analyze(provider,prompt,evidence,graph=None,risk=None):
     key=get_api_key(provider)
     if not key: raise RuntimeError(f'No {provider} API key saved or OS credential storage is unavailable. Open AI provider settings.')
     context='\n\n'.join(f'[{i+1}] {e.title} | Source: {e.source} | URL: {e.url}\n{e.content[:9000]}' for i,e in enumerate(evidence))
