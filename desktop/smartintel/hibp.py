@@ -19,7 +19,7 @@ BASE = "https://haveibeenpwned.com/api/v3"
 
 def check_email_breaches(email: str, *, timeout: float = 15.0) -> dict:
     value = (email or "").strip()
-    if len(value) > 254 or not re.fullmatch(r"[^\\s@<>]+@[^\\s@<>]+\\.[^\\s@<>]+", value):
+    if len(value) > 254 or not re.fullmatch(r"[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+", value):
         raise ValueError("Enter one syntactically valid email address.")
     key = get_api_key("hibp")
     if not key:
