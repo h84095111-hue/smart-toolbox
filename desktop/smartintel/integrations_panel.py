@@ -16,6 +16,7 @@ class _Task(QThread):
 
 class IntegrationsPanel(QWidget):
     finding_ready=pyqtSignal(object)
+    workflow_ready=pyqtSignal(object)
     def __init__(self,parent=None):
         super().__init__(parent); self.latest=None; self.task=None
         v=QVBoxLayout(self); v.setSpacing(12)
