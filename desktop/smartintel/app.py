@@ -206,7 +206,35 @@ class MainWindow(QMainWindow):
         self.case_list.blockSignals(False)
     def manage_team(self):
         if not self.current_user or self.current_user.get("role") != "admin":
-            QMessageBox.warning(self, "Administrator only", "Only an administrator can create or disable local accounts.")
+            QMessageBox.warning(self, "Administrator only", "Only an administrator can manage local accounts.")
+            return
+        action, ok = QInputDialog.getItem(self, "Manage local accounts", "Action:",
+                                          ["Create account", "Change account status"], 0, False)
+        if not ok:
+            return
+        if action == "Change account status":
+            users = [item for item in self.store.list_users() if item["id"] != self.current_user["id"]]
+            if not users:
+                QMessageBox.information(self, "No other accounts", "There are no other accounts to manage.")
+                return
+            labels = [item["username"] + " (" + item["role"] + ") · " +
+                      ("disabled" if item["disabled"] else "active") for item in users]
+            selected, ok = QInputDialog.getItem(self, "Account status", "Select account:", labels, 0, False)
+            if not ok:
+                return
+            user = users[labels.index(selected)]
+            enable = bool(user["disabled"])
+            verb = "Enable" if enable else "Disable"
+            answer = QMessageBox.question(self, verb + " account",
+                verb + " " + user["username"] + "? This affects the next sign-in.")
+            if answer != QMessageBox.StandardButton.Yes:
+                return
+            try:
+                self.store.set_user_disabled(user["id"], not enable)
+                QMessageBox.information(self, "Account updated",
+                    user["username"] + " is now " + ("active" if enable else "disabled") + ".")
+            except Exception as exc:
+                QMessageBox.warning(self, "Account not changed", str(exc))
             return
         username, ok = QInputDialog.getText(self, "Create local account", "Username:")
         if not ok or not username.strip():
