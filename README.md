@@ -92,3 +92,18 @@ Cases are stored locally in `~/.smart-intel/data/`. API keys are stored through 
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+
+## Graph and identity-analysis safeguards
+
+The desktop graph now debounces text filtering, calculates filters/clusters/layout in a worker thread, and uses a component-aware linear-time layout fallback for graphs above 180 nodes. Smaller graphs use the force-directed layout. Semantic identity hints are captured by the built-in website collector before it reduces HTML to text; the graph also accepts structured semantic identifier records from evidence JSON.
+
+Phone extraction accepts semantic attributes only when their names contain exact tokens such as `telephone`, `phone`, or `tel`, and requires at least eight digits. This is a format filter, not phone-number validation or ownership verification.
+
+False-positive triage is scoped to the selected graph identifier. An unrelated email elsewhere in the same evidence record cannot lower the selected username or phone node's risk. Evidence age uses a rolling 365-day window. Distinct source labels are not assumed to be independent sources, and the index remains an uncalibrated heuristic.
+
+Email, phone, and profile-metadata identity-check observations are now saved to the active case as evidence, in addition to Maigret candidate-profile findings. These checks still do not establish mailbox existence, phone subscriber identity, or account ownership.
+
+## Remaining work
+
+The workflow engine, adapter manager and source catalogue still need app integration. Screenshots/WARC capture, encrypted case storage, opt-in proxy/Tor routing, real account discovery and authorized breach/corporate/court-data integrations, graph editing/export, timeline filters, multi-user roles, scheduling, SIEM integration, signed releases and UI automation remain planned or incomplete. Do not treat the application as a finished or production-hardened investigation platform.
