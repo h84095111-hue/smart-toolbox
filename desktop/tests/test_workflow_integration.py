@@ -49,6 +49,7 @@ def test_profile_metadata_fetch_uses_pinned_public_fetch(monkeypatch):
         is_permanent_redirect = False
         def raise_for_status(self): pass
     calls = []
+    monkeypatch.setattr(identity_checks, "_public_profile_url", lambda url: url)
     monkeypatch.setattr("smartintel.collectors.passive._get_public_pinned",
                         lambda url: calls.append(url) or FakeResponse())
     result = identity_checks.fetch_public_profile_metadata("https://example.org/profile")
