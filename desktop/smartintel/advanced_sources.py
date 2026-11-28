@@ -74,28 +74,55 @@ def courtlistener_search(query: str) -> dict:
         "CourtListener API", url)
 
 
-def opensanctions_search(query: str, *, dataset: str = "sanctions", schema: str = "LegalEntity") -> dict:
+def opensanctions_search(query: str, *, dataset: str = "sanctions", schema: str = "Person") -> dict:
+    """Screen an analyst-supplied name using OpenSanctions query-by-example matching.
+
+    A name-only query is inherently ambiguous. The score ranks candidates and
+    is not a final sanctions determination; the analyst must compare primary
+    identifiers and source records before any decision.
+    """
     value = (query or "").strip()
     if len(value) < 2 or len(value) > 160:
         raise ValueError("Enter a name between 2 and 160 characters.")
     if dataset not in {"sanctions", "peps", "default"}:
-        raise ValueError("Unsupported OpenSanctions dataset.")
-    if schema not in {"LegalEntity", "Person", "Company", "Organization", "Vessel"}:
+        raise ValueError("Unsupported OpenSanctions matching dataset.")
+    if schema not in {"Person", "LegalEntity", "Company", "Organization", "Vessel"}:
         raise ValueError("Unsupported entity schema.")
     key = get_api_key("opensanctions")
     if not key:
         raise RuntimeError("Configure an OpenSanctions API key in Smart Intel settings.")
-    url = "https://api.opensanctions.org/search/" + dataset
-    payload = _get(url, params={"q": value, "limit": 20, "schema": schema},
-                   headers={"Authorization": "ApiKey " + key}).json()
-    rows = payload.get("results", [])
+    url = "https://api.opensanctions.org/match/" + dataset
+    request_body = {
+        "queries": {
+            "smartintel-query": {
+                "schema": schema,
+                "properties": {"name": [value]},
+            }
+        }
+    }
+    params = {"limit": 20, "algorithm": "best"}
+    if dataset == "sanctions":
+        params["topics"] = ["sanction", "sanction.linked", "debarment"]
+    elif dataset == "peps":
+        params["topics"] = ["role.pep", "role.rca"]
+    response = requests.post(
+        url, json=request_body, params=params,
+        headers={**UA, "Authorization": "ApiKey " + key},
+        timeout=22, proxies=requests_proxy_map(), allow_redirects=False,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    query_result = payload.get("responses", {}).get("smartintel-query", {})
+    rows = query_result.get("results", [])
     matches = []
     for row in rows[:20]:
         matches.append({k: row.get(k) for k in (
-            "id", "caption", "schema", "score", "datasets", "countries", "topics", "referents"
+            "id", "caption", "schema", "score", "datasets", "properties", "referents"
         ) if k in row})
-    return _finding("OpenSanctions candidate search",
-        {"query": value, "dataset": dataset, "schema": schema, "count": payload.get("total", len(matches)),
+    return _finding("OpenSanctions candidate screening",
+        {"query": value, "dataset": dataset, "schema": schema,
+         "query_status": query_result.get("status"),
+         "candidate_count": query_result.get("total", len(matches)),
          "results": matches,
-         "warning": "Name-only search is not a sanctions screening decision. Resolve date of birth, jurisdiction, identifiers and primary-source records before any action."},
-        "OpenSanctions API", url, "Low")
+         "warning": "A name-only match may produce false positives, especially for common names. Compare date of birth, nationality, identifiers, jurisdiction, designation authority and primary sources. Do not take adverse action from this result alone."},
+        "OpenSanctions Matching API", url, "Low")
