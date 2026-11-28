@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from .config import DB_PATH, APP_DIR
 from .models import Evidence
-from . import secure_vault
+from . import secure_vault, database_encryption
 
 
 class Store:
@@ -16,8 +16,11 @@ class Store:
         self._init()
 
     def connect(self):
-        db = sqlite3.connect(self.path, timeout=30)
-        db.row_factory = sqlite3.Row
+        if database_encryption.database_encryption_enabled():
+            db = database_encryption.encrypted_connect(self.path)
+        else:
+            db = sqlite3.connect(self.path, timeout=30)
+            db.row_factory = sqlite3.Row
         db.execute("PRAGMA foreign_keys=ON")
         db.execute("PRAGMA journal_mode=WAL")
         return db
@@ -95,6 +98,13 @@ class Store:
                                ("SIENC1:" + base64.b64encode(token).decode("ascii"), row["id"]))
             db.execute("INSERT OR REPLACE INTO vault_settings(key,value) VALUES('enabled','1')")
         self.append_event(None, {"action":"evidence_payload_encryption_enabled","scope":"all_cases"})
+
+    def enable_database_encryption(self):
+        """Migrate this case database to SQLCipher; preserve a plaintext backup."""
+        result = database_encryption.encrypt_database(self.path)
+        self._init()
+        self.append_event(None, {"action": "full_database_encryption_enabled", "algorithm": result["algorithm"]})
+        return result
 
     def vault_status(self):
         configured = self._vault_configured()
