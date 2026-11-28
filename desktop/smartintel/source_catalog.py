@@ -71,7 +71,7 @@ SOURCE_CATALOG: tuple[SourceDescriptor, ...] = (
     SourceDescriptor("whoxy", "Whoxy", "whois_history", "authenticated_api", ("WHOXY_API_KEY",)),
     SourceDescriptor("google_cse", "Google Programmable Search", "web_search", "authenticated_api", ("GOOGLE_CSE_API_KEY", "GOOGLE_CSE_CX")),
     SourceDescriptor("bing_search", "Bing Web Search", "web_search", "authenticated_api", ("BING_SEARCH_API_KEY",)),
-    SourceDescriptor("telegram_api", "Telegram Bot API", "social_monitoring", "authenticated_api", ("SMART_INTEL_TELEGRAM_BOT_TOKEN",), "implemented", "getUpdates channel_post/edited_channel_post for analyst-specified public channels; updates only, no history/backfill; one bot update cursor"),
+    SourceDescriptor("telegram_api", "Telegram Bot API", "social_monitoring", "authenticated_api", (), "implemented", "Bot token stored in OS keyring; getUpdates channel_post/edited_channel_post for analyst-specified public channels; updates only, no history/backfill; one bot update cursor"),
     SourceDescriptor("reddit", "Reddit API", "social_monitoring", "authenticated_api", ("REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET")),
     SourceDescriptor("mastodon", "Mastodon public account statuses", "social_monitoring", "public_api", status="implemented", notes="One explicitly supplied account; visibility=public only; no global federated search"),
     SourceDescriptor("bluesky_public_search", "Bluesky public search", "social_monitoring", "public_api", status="implemented", notes="Public AppView search endpoint; current service limits apply"),
