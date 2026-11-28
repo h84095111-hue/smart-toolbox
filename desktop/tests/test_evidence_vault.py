@@ -32,7 +32,7 @@ def test_evidence_content_encryption_round_trip(tmp_path, monkeypatch):
     store = Store(tmp_path / "encrypted.sqlite3")
     case_id = store.create_case("Encrypted")
     store.add_evidence(Evidence(case_id, "test", "secret", content="private evidence"))
-    monkeypatch.setattr("smartintel.storage.secure_vault.vault_enabled", lambda: True)
+    monkeypatch.setattr(store, "_vault_configured", lambda: True)
     monkeypatch.setattr("smartintel.storage.secure_vault.encrypt", lambda b: b"cipher:" + b)
     monkeypatch.setattr("smartintel.storage.secure_vault.decrypt", lambda b: b.removeprefix(b"cipher:"))
     store.add_evidence(Evidence(case_id, "test", "encrypted", content="new private evidence"))
