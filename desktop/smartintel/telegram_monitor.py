@@ -52,9 +52,13 @@ def poll_telegram_channels(config: dict) -> dict:
     if offset > 0:
         params["offset"] = offset
     endpoint = "https://api.telegram.org/bot" + token + "/getUpdates"
-    response = requests.get(endpoint, params=params, headers={
-        "User-Agent": "SmartIntel/2.1 public channel monitor",
-    }, timeout=20, proxies=requests_proxy_map(), allow_redirects=False)
+    try:
+        response = requests.get(endpoint, params=params, headers={
+            "User-Agent": "SmartIntel/2.1 public channel monitor",
+        }, timeout=20, proxies=requests_proxy_map(), allow_redirects=False)
+    except requests.RequestException:
+        # Do not echo the Bot API URL: it contains the secret token.
+        raise RuntimeError("Could not reach the Telegram Bot API through the configured network route.") from None
     if response.status_code != 200:
         raise RuntimeError("Telegram Bot API request failed with HTTP " + str(response.status_code) + ".")
     payload = response.json()
@@ -79,7 +83,7 @@ def poll_telegram_channels(config: dict) -> dict:
             continue
         message_id = str(message.get("message_id", ""))
         channel_id = str(chat.get("id", ""))
-        stable = channel_id + ":" + message_id
+        stable = channel_id + ":" + message_id + ":" + str(message.get("edit_date", update.get("update_id", "")))
         published = ""
         try:
             published = datetime.fromtimestamp(int(message.get("date", 0)), tz=timezone.utc).isoformat()
