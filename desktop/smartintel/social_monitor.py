@@ -9,7 +9,8 @@ from __future__ import annotations
 import hashlib
 import re
 from urllib.parse import quote, urlparse, urlunparse, urlencode
-import xml.etree.ElementTree as ET
+from defusedxml import ElementTree as ET
+from defusedxml.common import DefusedXmlException
 
 
 def _fetch_json(url: str) -> dict | list:
@@ -141,7 +142,7 @@ def monitor_rss_feed(feed_url: str, *, keywords: list[str] | None = None,
         raise ValueError("Feed exceeds the 1.5 MiB limit.")
     try:
         root = ET.fromstring(response.content)
-    except ET.ParseError as exc:
+    except (ET.ParseError, DefusedXmlException) as exc:
         raise ValueError("The configured URL did not return valid RSS/Atom XML.") from exc
     entries = []
     for element in root.iter():
