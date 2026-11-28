@@ -13,6 +13,9 @@ import multiprocessing as mp
 import threading
 import time
 import uuid
+import os
+import signal
+import subprocess
 
 Collector = Callable[[str, Mapping[str, Any]], Any]
 
@@ -87,6 +90,11 @@ class CollectorRegistry:
 
 def _collector_child(payload: bytes, sender) -> None:
     """Spawn target; cloudpickle is used only for serializing trusted callables."""
+    if os.name != "nt":
+        try:
+            os.setsid()
+        except OSError:
+            pass
     try:
         import cloudpickle
         fn, target, context = cloudpickle.loads(payload)
@@ -135,11 +143,30 @@ def _normalize_result(spec: CollectorSpec, value: Any) -> list[dict[str, Any]]:
 def _stop_process(process):
     if process is None:
         return
+    if os.name == "nt":
+        try:
+            subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                           capture_output=True, timeout=5, check=False)
+        except Exception:
+            pass
+        if process.is_alive():
+            process.terminate()
+    else:
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except (ProcessLookupError, PermissionError, OSError):
+            if process.is_alive():
+                process.terminate()
+    process.join(timeout=1.0)
     if process.is_alive():
-        process.terminate()
-        process.join(timeout=1.0)
-    if process.is_alive() and hasattr(process, "kill"):
-        process.kill()
+        if os.name == "nt" and hasattr(process, "kill"):
+            process.kill()
+        else:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError, OSError):
+                if hasattr(process, "kill"):
+                    process.kill()
         process.join(timeout=1.0)
     if process.is_alive():
         raise RuntimeError("Collector process did not stop after terminate/kill request.")
