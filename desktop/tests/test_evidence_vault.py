@@ -55,3 +55,15 @@ def test_vault_migration_encrypts_existing_evidence(tmp_path, monkeypatch):
         raw = db.execute("SELECT content FROM evidence WHERE title='before'").fetchone()["content"]
     assert raw.startswith("SIENC1:")
     assert store.evidence(case_id)[0].content == "plaintext"
+
+
+def test_missing_key_does_not_overwrite_existing_vault(tmp_path, monkeypatch):
+    store = Store(tmp_path / "locked.sqlite3")
+    monkeypatch.setattr(store, "_vault_configured", lambda: True)
+    monkeypatch.setattr("smartintel.storage.secure_vault.vault_enabled", lambda: False)
+    called = []
+    monkeypatch.setattr("smartintel.storage.secure_vault.enable_vault", lambda: called.append(True))
+    import pytest
+    with pytest.raises(RuntimeError, match="Refusing to generate a replacement key"):
+        store.enable_evidence_encryption()
+    assert called == []
