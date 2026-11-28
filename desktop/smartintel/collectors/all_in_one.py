@@ -98,8 +98,19 @@ def run_all(target, misp_url=""):
         target_type=target_type,
         policy=ExecutionPolicy(max_workers=6, timeout_seconds=60.0, allow_active=False),
     )
-    failures = [f"{row['collector']}: {row['error']}" for row in result["failures"]]
+    failures = []
     skipped = [f"{row['collector']}: {row['reason']}" for row in result["skipped"]]
+    friendly = {"crtsh": "Certificate transparency", "virustotal": "VirusTotal", "urlscan": "urlscan.io",
+                "otx": "AlienVault OTX", "securitytrails": "SecurityTrails", "abuseipdb": "AbuseIPDB"}
+    for row in result["failures"]:
+        label = friendly.get(row["collector"], row["collector"])
+        message = row["error"]
+        if "API key" in message or "not configured" in message.lower() or "credential" in message.lower():
+            skipped.append(f"{label}: provider key/configuration missing")
+        else:
+            failures.append(f"{label}: {message}")
+    order = {spec.name: index for index, spec in enumerate(build_registry(misp_url=misp_url).list())}
+    result["findings"].sort(key=lambda item: order.get(item.get("collector", ""), len(order)))
     if target_type == "email":
         skipped.append("Email checks are validation and authorized notification guidance only; no account discovery or credential-dump search is performed.")
     if target_type == "username":
