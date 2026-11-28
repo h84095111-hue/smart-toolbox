@@ -30,15 +30,33 @@ def _signing_key():
 
 
 def signed_export(case: dict, evidence: list[dict], output_path: str | Path, *,
+                  attachments: list[dict] | None = None,
                   tsa_url: str = "", tsa_ca_file: str = "") -> dict:
     from cryptography.hazmat.primitives import serialization
     key = _signing_key()
     public_key = key.public_key()
+    attachment_rows = []
+    attachment_payloads = []
+    total_attachment_bytes = 0
+    for index, item in enumerate(attachments or []):
+        data = bytes(item.get("content", b""))
+        total_attachment_bytes += len(data)
+        if len(data) > 100 * 1024 * 1024 or total_attachment_bytes > 300 * 1024 * 1024:
+            raise ValueError("Signed export attachments are limited to 100 MiB each and 300 MiB total.")
+        attachment_id = str(item.get("id", index))
+        archive_path = "attachments/" + hashlib.sha256(attachment_id.encode("utf-8")).hexdigest()[:24] + ".bin"
+        attachment_rows.append({
+            "id": attachment_id, "filename": str(item.get("filename", "attachment"))[:255],
+            "kind": str(item.get("kind", "attachment"))[:80], "size": len(data),
+            "sha256": hashlib.sha256(data).hexdigest(), "archive_path": archive_path,
+        })
+        attachment_payloads.append((archive_path, data))
     manifest = {
         "format": "smart-intel-signed-export-v1",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "case": case,
         "evidence": evidence,
+        "attachments": attachment_rows,
     }
     payload = json.dumps(manifest, sort_keys=True, ensure_ascii=False, separators=(",", ":"),
                          default=str).encode("utf-8")
@@ -84,6 +102,8 @@ def signed_export(case: dict, evidence: list[dict], output_path: str | Path, *,
         archive.writestr("manifest.sha256", hashlib.sha256(payload).hexdigest() + "\n")
         archive.writestr("timestamp.tsr", timestamp_data)
         archive.writestr("timestamp_status.txt", timestamp_status + "\n")
+        for archive_path, data in attachment_payloads:
+            archive.writestr(archive_path, data)
     return {"path": str(output), "sha256": hashlib.sha256(output.read_bytes()).hexdigest(),
             "manifest_sha256": hashlib.sha256(payload).hexdigest(),
             "public_key_sha256": hashlib.sha256(public_pem).hexdigest(),
@@ -105,6 +125,25 @@ def verify_signed_export(path: str | Path, *, tsa_ca_file: str = "") -> dict:
                                   if "manifest.sha256" in archive.namelist() else "")
     digest = hashlib.sha256(payload).hexdigest()
     hash_matches = not recorded_manifest_hash or recorded_manifest_hash == digest
+    try:
+        manifest = json.loads(payload.decode("utf-8"))
+    except Exception as exc:
+        raise ValueError("Signed export manifest is not valid JSON.") from exc
+    attachment_checks = []
+    with zipfile.ZipFile(path, "r") as archive:
+        names = set(archive.namelist())
+        for item in manifest.get("attachments", []):
+            archive_path = item.get("archive_path", "")
+            if not isinstance(archive_path, str) or not archive_path.startswith("attachments/"):
+                attachment_checks.append({"id": item.get("id"), "valid": False, "error": "invalid attachment path"})
+                continue
+            if archive_path not in names:
+                attachment_checks.append({"id": item.get("id"), "valid": False, "error": "missing attachment"})
+                continue
+            data = archive.read(archive_path)
+            ok = len(data) == item.get("size") and hashlib.sha256(data).hexdigest() == item.get("sha256")
+            attachment_checks.append({"id": item.get("id"), "valid": bool(ok)})
+    attachments_valid = all(row["valid"] for row in attachment_checks)
     public_key = serialization.load_pem_public_key(public_pem)
     try:
         public_key.verify(signature, payload)
@@ -135,8 +174,9 @@ def verify_signed_export(path: str | Path, *, tsa_ca_file: str = "") -> dict:
     elif timestamp_data:
         timestamp_result = recorded_timestamp_status or "received_unverified"
     return {
-        "valid": valid,
+        "valid": bool(valid and attachments_valid),
         "sha256": digest,
+        "attachments": attachment_checks,
         "public_key_sha256": hashlib.sha256(public_pem).hexdigest(),
         "manifest_hash_matches": hash_matches,
         "timestamp_status": timestamp_result,
