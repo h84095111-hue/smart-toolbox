@@ -70,7 +70,7 @@ def check_email_breaches(email: str, *, timeout: float = 15.0) -> dict:
         "identifier_type": "email",
         "email": value,
         "source": "Have I Been Pwned API v3",
-        "source_url": endpoint,
+        "source_url": endpoint,\n        "attribution": "Data from Have I Been Pwned",\n        "attribution_url": "https://haveibeenpwned.com/",
         "breach_count": len(safe),
         "breaches": safe,
         "limitations": "This is a breach-notification result, not evidence that a mailbox is currently accessible or that the subject controls it. The API returns breach metadata only; no passwords or stolen credential records are retrieved. Use only for an email address you are authorized to assess.",
