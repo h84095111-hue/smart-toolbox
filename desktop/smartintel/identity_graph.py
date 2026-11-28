@@ -41,7 +41,7 @@ def _node_id(kind: str, value: str) -> str:
     return kind + ":" + hashlib.sha256((kind+":"+value.casefold()).encode()).hexdigest()[:16]
 
 def build_identity_graph(evidence: list[Any]) -> IdentityGraph:
-    """Extract conservative public identifiers and attach each to its evidence source."""
+    """Extract identifiers, provenance edges, and cautious same-record relationships."""
     nodes: dict[str, GraphNode] = {}
     edges: dict[tuple[str,str,str], GraphEdge] = {}
     def node(kind: str, label: str, eid: str) -> str:
@@ -57,31 +57,35 @@ def build_identity_graph(evidence: list[Any]) -> IdentityGraph:
         content=str(getattr(item,"content","") or "")
         source_id=node("source",source_label,eid)
         candidates=[]
-        for value in _EMAIL.findall(title+" "+url+" "+content):
-            candidates.append(("email",value.lower(),"Exact email string found in supplied evidence"))
-        for value in _HANDLE.findall(title+" "+url+" "+content):
-            candidates.append(("username",value,"Public handle-like string found in supplied evidence"))
+        for value in _EMAIL.findall(title+" "+url+" "+content): candidates.append(("email",value.lower(),"Exact email string found in supplied evidence"))
+        for value in _HANDLE.findall(title+" "+url+" "+content): candidates.append(("username",value,"Public handle-like string found in supplied evidence"))
         for value in _PHONE.findall(title+" "+content):
             normalized=re.sub(r"[^\d+]","",value)
-            if len(re.sub(r"\D","",normalized))>=8:
-                candidates.append(("phone",normalized,"Phone-like string found; ownership is not verified"))
+            if len(re.sub(r"\D","",normalized))>=8: candidates.append(("phone",normalized,"Phone-like string found; ownership is not verified"))
         for value in _URL.findall(title+" "+content):
             clean=value.rstrip(".,);]")
-            host=urlparse(clean).hostname
-            if host:
-                candidates.append(("profile_or_url",clean,"URL explicitly present in supplied evidence"))
-        if url:
-            host=urlparse(url).hostname
-            if host: candidates.append(("profile_or_url",url,"Evidence record URL"))
-        seen=set()
+            if urlparse(clean).hostname: candidates.append(("profile_or_url",clean,"URL explicitly present in supplied evidence"))
+        if url and urlparse(url).hostname: candidates.append(("profile_or_url",url,"Evidence record URL"))
+        seen=set(); observed=[]
         for kind,label,why in candidates:
             token=(kind,label.casefold())
             if token in seen: continue
             seen.add(token)
-            target=node(kind,label,eid)
+            target=node(kind,label,eid); observed.append((target,kind,label))
             key=(source_id,target,"observed_in")
             if key not in edges: edges[key]=GraphEdge(source_id,target,"observed_in",[eid],why,"low")
             elif eid not in edges[key].evidence_ids: edges[key].evidence_ids.append(eid)
+        # Identifiers in the same record are related only by co-occurrence, not identity.
+        # Cap pair generation to avoid pathological evidence creating quadratic graphs.
+        observed=observed[:20]
+        for i,(left,lk,ll) in enumerate(observed):
+            for right,rk,rl in observed[i+1:]:
+                if left==right: continue
+                a,b=sorted((left,right))
+                key=(a,b,"co_observed")
+                rationale=f"{lk} '{ll}' and {rk} '{rl}' occur in the same evidence record; this is not proof of common ownership."
+                if key not in edges: edges[key]=GraphEdge(a,b,"co_observed",[eid],rationale,"low")
+                elif eid not in edges[key].evidence_ids: edges[key].evidence_ids.append(eid)
     return IdentityGraph(list(nodes.values()),list(edges.values()),datetime.now(timezone.utc).isoformat())
 
 def validate_graph(graph: IdentityGraph) -> None:
