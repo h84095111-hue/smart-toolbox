@@ -37,7 +37,7 @@ class IdentityFinding:
 
 def _valid_username(value: str) -> str:
     value = (value or "").strip().lstrip("@")
-    if not re.fullmatch(r"[A-Za-z0-9_.-]{2,64}", value):
+    if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}", value):
         raise ValueError("Username must be 2-64 characters: letters, numbers, dot, underscore or hyphen.")
     return value
 
