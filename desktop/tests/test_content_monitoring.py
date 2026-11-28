@@ -113,7 +113,12 @@ def test_onion_monitor_requires_a_v3_onion_host_and_local_socks5h(monkeypatch):
 def test_content_monitor_persistence_and_telegram_single_cursor(tmp_path):
     store = Store(tmp_path / "content-monitor.sqlite3")
     user = store.create_user("monitor_admin", "very-long-password-123", "admin")
+    viewer = store.create_user("monitor_viewer", "viewer-password-long-123", "viewer")
     case_id = store.create_case("Monitor case", owner_id=user)
+    store.add_case_member(case_id, viewer, "viewer")
+    with pytest.raises(PermissionError, match="Only case owners or analysts"):
+        store.create_content_monitor(case_id, "rss_feed",
+                                     {"feed_url": "https://example.org/feed.xml"}, 3600, viewer)
     monitor_id = store.create_content_monitor(
         case_id, "bluesky_search", {"query": "public updates", "keywords": ["public"]},
         3600, user)
