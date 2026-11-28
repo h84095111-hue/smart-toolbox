@@ -19,6 +19,7 @@ from .browser_capture import capture_public_screenshot
 from .image_intel import inspect_image, compare_images
 from .signing import signed_export, verify_signed_export
 from .monitoring_panel import MonitoringPanel
+from .content_monitoring_panel import ContentMonitoringPanel
 from .network import proxy_label, validate_proxy_url
 from .workflow import CollectorRegistry, CollectorSpec, ExecutionPolicy, CancellationToken, run_workflow
 
@@ -70,11 +71,11 @@ class SettingsDialog(QDialog):
         super().__init__(parent); self.setWindowTitle("AI provider settings"); self.setMinimumWidth(470)
         v=QVBoxLayout(self); v.addWidget(QLabel("API keys are saved in your OS credential store using keyring."))
         self.fields={}
-        for p in ("OpenAI","Gemini","Claude","virustotal","abuseipdb","otx","shodan","censys","securitytrails","misp","hibp","opencorporates","courtlistener","opensanctions","network_proxy"):
-            label=({"virustotal":"VirusTotal","abuseipdb":"AbuseIPDB","otx":"AlienVault OTX","shodan":"Shodan","censys":"Censys","securitytrails":"SecurityTrails","misp":"MISP","hibp":"Have I Been Pwned","opencorporates":"OpenCorporates","courtlistener":"CourtListener","opensanctions":"OpenSanctions","network_proxy":"HTTP / Tor SOCKS5 proxy URL"}).get(p,p)
-            v.addWidget(QLabel(label if p=="network_proxy" else label+" API key")); row=QHBoxLayout(); e=QLineEdit(); e.setEchoMode(QLineEdit.EchoMode.Password); e.setText(get_api_key(p) or ""); row.addWidget(e)
+        for p in ("OpenAI","Gemini","Claude","virustotal","abuseipdb","otx","shodan","censys","securitytrails","misp","hibp","opencorporates","courtlistener","opensanctions","network_proxy","telegram_bot_token"):
+            label=({"virustotal":"VirusTotal","abuseipdb":"AbuseIPDB","otx":"AlienVault OTX","shodan":"Shodan","censys":"Censys","securitytrails":"SecurityTrails","misp":"MISP","hibp":"Have I Been Pwned","opencorporates":"OpenCorporates","courtlistener":"CourtListener","opensanctions":"OpenSanctions","network_proxy":"HTTP / Tor SOCKS5H proxy URL","telegram_bot_token":"Telegram Bot API token"}).get(p,p)
+            v.addWidget(QLabel(label if p in {"network_proxy","telegram_bot_token"} else label+" API key")); row=QHBoxLayout(); e=QLineEdit(); e.setEchoMode(QLineEdit.EchoMode.Password); e.setText(get_api_key(p) or ""); row.addWidget(e)
             clear=QPushButton("Clear"); clear.clicked.connect(lambda _,provider=p,field=e:self.clear(provider,field)); row.addWidget(clear); v.addLayout(row); self.fields[p]=e
-        note=QLabel("Keys are stored in your OS credential store. Proxy routing is opt-in; for Tor use a running local SOCKS5 listener (commonly 127.0.0.1:9050). Smart Intel does not start Tor or manage VPN software. Proxy routing is not anonymity."); note.setObjectName("muted"); v.addWidget(note)
+        note=QLabel("Keys are stored in your OS credential store. Proxy routing is opt-in; for Tor use a running local SOCKS5 listener (commonly 127.0.0.1:9050). Smart Intel does not start Tor or manage VPN software. Proxy routing is not anonymity. Telegram: create a bot with BotFather, add it to the public channels you administer, then paste its token here. The Bot API delivers new channel updates only; it does not provide message history."); note.setObjectName("muted"); v.addWidget(note)
         save=QPushButton("Save keys"); save.setObjectName("primary"); save.clicked.connect(self.save); v.addWidget(save)
     def clear(self,p,e):
         try:delete_api_key(p)
@@ -105,7 +106,7 @@ class MainWindow(QMainWindow):
         self.case_list=QListWidget(); self.case_list.currentRowChanged.connect(self.case_selected); sv.addWidget(self.case_list,1)
         new=QPushButton("+  New investigation"); new.setObjectName("primary"); new.clicked.connect(self.new_case); sv.addWidget(new); self.new_case_button=new
         self.nav=[]
-        for text,idx in [("⌕  Collect intelligence",0),("◉  OSINT source hub",1),("▤  Evidence & timeline",2),("⌘  AI analyst",3),("▤  Reports",4),("◎  Identity graph",5)]:
+        for text,idx in [("⌕  Collect intelligence",0),("◉  OSINT source hub",1),("▤  Evidence & timeline",2),("⌘  AI analyst",3),("▤  Reports",4),("◎  Identity graph",5),("◉  Social / Telegram / Tor",7)]:
             b=QPushButton(text); b.clicked.connect(lambda _,i=idx:self.tabs.setCurrentIndex(i)); sv.addWidget(b)
         team=QPushButton("♙  Manage users"); team.clicked.connect(self.manage_team); sv.addWidget(team)
         share=QPushButton("↗  Share active case"); share.clicked.connect(self.share_case); sv.addWidget(share)
@@ -117,7 +118,7 @@ class MainWindow(QMainWindow):
         top=QHBoxLayout(); eyebrow=QLabel("INTELLIGENCE WORKSPACE"); eyebrow.setObjectName("eyebrow"); top.addWidget(eyebrow); top.addStretch()
         self.status=QLabel("Ready"); self.status.setObjectName("muted"); top.addWidget(self.status); mv.addLayout(top)
         hero=QLabel("Investigate the public web.\nConnect evidence. Find the signal."); hero.setObjectName("heading"); hero.setStyleSheet("background:#182449;border:1px solid #38457a;border-radius:12px;padding:18px"); mv.addWidget(hero)
-        self.tabs=QTabWidget(); self.tabs.addTab(self.collect_tab(),"Collect"); self.integrations=IntegrationsPanel(); self.integrations.finding_ready.connect(self.integration_done); self.integrations.workflow_ready.connect(self.workflow_done); self.tabs.addTab(self.integrations,"OSINT Sources"); self.tabs.addTab(self.evidence_tab(),"Evidence & Timeline"); self.tabs.addTab(self.ai_tab(),"AI Analyst"); self.tabs.addTab(self.report_tab(),"Reports"); self.graph_panel=IdentityGraphPanel(self.store); self.tabs.addTab(self.graph_panel,"Identity Graph"); self.monitoring_panel=MonitoringPanel(self.store,self.current_user); self.monitoring_panel.evidence_added.connect(self.monitoring_evidence_added); self.tabs.addTab(self.monitoring_panel,"Monitoring"); mv.addWidget(self.tabs,1)
+        self.tabs=QTabWidget(); self.tabs.addTab(self.collect_tab(),"Collect"); self.integrations=IntegrationsPanel(); self.integrations.finding_ready.connect(self.integration_done); self.integrations.workflow_ready.connect(self.workflow_done); self.tabs.addTab(self.integrations,"OSINT Sources"); self.tabs.addTab(self.evidence_tab(),"Evidence & Timeline"); self.tabs.addTab(self.ai_tab(),"AI Analyst"); self.tabs.addTab(self.report_tab(),"Reports"); self.graph_panel=IdentityGraphPanel(self.store); self.tabs.addTab(self.graph_panel,"Identity Graph"); self.monitoring_panel=MonitoringPanel(self.store,self.current_user); self.monitoring_panel.evidence_added.connect(self.monitoring_evidence_added); self.tabs.addTab(self.monitoring_panel,"Monitoring"); self.content_monitor_panel=ContentMonitoringPanel(self.store,self.current_user); self.content_monitor_panel.evidence_added.connect(self.monitoring_evidence_added); self.tabs.addTab(self.content_monitor_panel,"Social / Telegram / Tor"); mv.addWidget(self.tabs,1)
         row.addWidget(main,1); self.setCentralWidget(root); self.refresh_cases()
         if self.case_list.count():self.case_list.setCurrentRow(0)
         elif self.current_user and self.current_user.get("role") in {"admin","analyst"}:self.new_case()
@@ -316,7 +317,7 @@ class MainWindow(QMainWindow):
         self.integrations.all_button.setEnabled(writable); self.integrations.run_button.setEnabled(writable); self.integrations.identity_button.setEnabled(writable)
         self.graph_panel.add_lead_button.setEnabled(writable); self.graph_panel.merge_button.setEnabled(writable); self.graph_panel.undo_button.setEnabled(writable)
         self.new_case_button.setEnabled(bool(self.current_user and self.current_user.get("role") in {"admin","analyst"}))
-        self.refresh_evidence(); self.refresh_attachments(); self.graph_panel.set_case(self.case_id); self.monitoring_panel.set_case(self.case_id)
+        self.refresh_evidence(); self.refresh_attachments(); self.graph_panel.set_case(self.case_id); self.monitoring_panel.set_case(self.case_id); self.content_monitor_panel.set_case(self.case_id)
     def collect(self):
         if not self.require_case(write=True):return
         value=self.target.text().strip()
