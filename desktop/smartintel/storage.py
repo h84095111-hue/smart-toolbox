@@ -105,6 +105,13 @@ class Store:
 
     def set_user_disabled(self, user_id, disabled=True):
         with self.connect() as db:
+            row = db.execute("SELECT role,disabled FROM users WHERE id=?", (user_id,)).fetchone()
+            if row is None:
+                raise KeyError("Unknown account.")
+            if disabled and row["role"] == "admin" and not row["disabled"]:
+                active_admins = db.execute("SELECT COUNT(*) FROM users WHERE role='admin' AND disabled=0").fetchone()[0]
+                if active_admins <= 1:
+                    raise ValueError("The last active administrator cannot be disabled.")
             db.execute("UPDATE users SET disabled=? WHERE id=?", (1 if disabled else 0, user_id))
         self.append_event(None, {"action": "user_access_changed", "user_id": user_id, "disabled": bool(disabled)})
 
