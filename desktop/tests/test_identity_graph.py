@@ -34,3 +34,12 @@ def test_name_only_is_high_risk():
 def test_calibration_requires_labeled_examples():
     assert calibration_status(12).startswith("uncalibrated")
     assert "candidate" in calibration_status(150)
+
+
+def test_local_ai_prompt_contains_evidence_and_untrusted_data_warning():
+    from smartintel.ai_analysis import build_analysis_prompt
+    evidence=SimpleNamespace(id="ev-1",title="Public profile",source="Example",url="https://example.org",observed_at="2026-01-01T00:00:00Z",content="A profile bio")
+    prompt=build_analysis_prompt("summarize",{"nodes":[],"edges":[]},{"score":55},[evidence])
+    assert "ev-1" in prompt and "A profile bio" in prompt
+    assert "untrusted data" in prompt.lower()
+    assert "Do not convert the heuristic risk index into a probability" in prompt
