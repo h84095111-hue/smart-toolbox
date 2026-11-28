@@ -339,3 +339,87 @@ def check_identity(identifier_type: str, value: str, **options: Any) -> dict[str
     if kind == "phone":
         return inspect_phone_number(value, **options)
     raise ValueError("identifier_type must be username, email or phone")
+
+
+def _public_profile_url(url: str) -> str:
+    """Reject non-public hosts before making a passive profile-page request."""
+    parsed = urlparse((url or "").strip())
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError("Profile URL must be an absolute HTTP(S) URL.")
+    if parsed.username or parsed.password or parsed.port not in {None, 80, 443}:
+        raise ValueError("Profile URL must not contain credentials or a non-standard port.")
+    host = parsed.hostname.rstrip(".")
+    try:
+        address = __import__("ipaddress").ip_address(host)
+        addresses = [address]
+    except ValueError:
+        try:
+            addresses = [__import__("ipaddress").ip_address(item[4][0])
+                         for item in socket.getaddrinfo(host, parsed.port or (443 if parsed.scheme == "https" else 80),
+                                                        type=socket.SOCK_STREAM)]
+        except OSError as exc:
+            raise ValueError("Profile host could not be resolved.") from exc
+    if not addresses or any(not address.is_global for address in addresses):
+        raise ValueError("Only publicly routable profile hosts are allowed.")
+    return url.strip()
+
+
+def fetch_public_profile_metadata(url: str, *, timeout: float = 10.0, max_bytes: int = 2_000_000) -> dict[str, Any]:
+    """Fetch one public HTML profile page without cookies, redirects or challenge bypass."""
+    safe_url = _public_profile_url(url)
+    import requests
+    response = requests.get(
+        safe_url,
+        headers={"User-Agent": "SmartIntel-Passive-OSINT/1.0"},
+        timeout=(4.0, timeout),
+        allow_redirects=False,
+        stream=True,
+    )
+    try:
+        if response.is_redirect or response.is_permanent_redirect:
+            return {"status": "redirect_not_followed", "url": safe_url,
+                    "limitations": "Redirects are not followed automatically; review the destination manually."}
+        response.raise_for_status()
+        content_type = response.headers.get("Content-Type", "").lower()
+        if "text/html" not in content_type:
+            return {"status": "not_html", "url": safe_url, "content_type": content_type}
+        chunks: list[bytes] = []
+        total = 0
+        for chunk in response.iter_content(chunk_size=65536):
+            if not chunk:
+                continue
+            total += len(chunk)
+            if total > max_bytes:
+                raise ValueError("Profile page exceeds the 2 MB parsing limit.")
+            chunks.append(chunk)
+        html = b"".join(chunks).decode(response.encoding or "utf-8", errors="replace")
+    finally:
+        response.close()
+
+    metadata = extract_profile_metadata(html, safe_url)
+    candidates: list[dict[str, str]] = []
+    for linked_url in metadata["rel_me_links"]:
+        parsed = urlparse(linked_url)
+        parts = [part for part in parsed.path.split("/") if part]
+        if not parts:
+            continue
+        handle = parts[-1].lstrip("@")
+        try:
+            handle = _valid_username(handle)
+        except ValueError:
+            continue
+        candidates.append({
+            "username": handle,
+            "url": linked_url,
+            "reason": "Public profile contains a self-asserted rel=me link; verify before pivoting.",
+            "status": "pending_analyst_approval",
+        })
+    unique = {item["username"]: item for item in candidates}
+    return {
+        "status": "completed",
+        "identifier_type": "profile_url",
+        "profile": metadata,
+        "pivot_candidates": list(unique.values())[:20],
+        "limitations": "Only public HTML metadata and rel=me links were parsed. Linked accounts are self-asserted leads, not verified identities. No redirects, logins, cookies, CAPTCHAs or access controls are bypassed.",
+    }
+
