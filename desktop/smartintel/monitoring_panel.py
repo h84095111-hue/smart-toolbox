@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from PyQt6.QtCore import QThread, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox,
-    QPushButton, QTableWidget, QTableWidgetItem, QMessageBox
+    QPushButton, QTableWidget, QTableWidgetItem, QMessageBox, QHeaderView, QAbstractItemView
 )
 
 from .collectors.all_in_one import run_all, _target_kind
@@ -64,8 +64,8 @@ class MonitoringPanel(QWidget):
         root.addLayout(row)
         self.table = QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels(["Target", "Interval", "Next run UTC", "Last result", "Schedule ID"])
-        self.table.horizontalHeader().setSectionResizeMode(0, self.table.horizontalHeader().ResizeMode.Stretch)
-        self.table.setSelectionBehavior(self.table.SelectionBehavior.SelectRows)
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         root.addWidget(self.table, 1)
         actions = QHBoxLayout()
         self.remove_button = QPushButton("Remove selected schedule")
@@ -114,6 +114,9 @@ class MonitoringPanel(QWidget):
         if not self.user or self.user.get("role") not in {"admin", "analyst"}:
             QMessageBox.warning(self, "Read-only access", "Only an analyst or administrator can create schedules.")
             return
+        if self.store.user_case_role(self.case_id, self.user) not in {"owner", "analyst"}:
+            QMessageBox.warning(self, "Case access required", "Your role on this case does not permit scheduling.")
+            return
         raw = self.target.text().strip()
         try:
             kind, normalized, _ = _target_kind(raw)
@@ -153,7 +156,9 @@ class MonitoringPanel(QWidget):
             return
         now = datetime.now(timezone.utc)
         due = self.store.due_monitor_schedules(now)
-        if self.user and self.user.get("role") != "admin":
+        if not self.user:
+            return
+        if self.user.get("role") != "admin":
             due = [row for row in due if row["created_by"] == self.user["id"]]
         if not due:
             self.refresh()
