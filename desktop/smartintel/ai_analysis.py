@@ -34,4 +34,4 @@ def analyze_evidence(question: str, graph: dict, risk: dict, provider: str="Olla
     if provider.lower()=="ollama": return analyze_with_ollama(question,graph,risk,evidence)
     from .providers.ai import analyze
     if not evidence: raise ValueError("Evidence records are required for cloud-provider analysis.")
-    return analyze(provider,question,evidence)
+    return analyze(provider,question,evidence,graph=graph,risk=risk)
