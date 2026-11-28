@@ -145,7 +145,23 @@ class Store:
     def add_graph_alias(self, case_id, alias_node_id, canonical_node_id, created_by=""):
         if alias_node_id == canonical_node_id:
             raise ValueError("A graph node cannot be merged into itself.")
+        alias_kind = str(alias_node_id).split(":", 1)[0]
+        canonical_kind = str(canonical_node_id).split(":", 1)[0]
+        if not alias_kind or alias_kind != canonical_kind:
+            raise ValueError("Only graph nodes of the same identifier type can be merged.")
         with self.connect() as db:
+            rows = db.execute("SELECT alias_node_id,canonical_node_id FROM graph_aliases WHERE case_id=?",
+                              (case_id,)).fetchall()
+            redirects = {row["alias_node_id"]: row["canonical_node_id"] for row in rows
+                         if row["alias_node_id"] != alias_node_id}
+            redirects[alias_node_id] = canonical_node_id
+            current = canonical_node_id
+            visited = {alias_node_id}
+            while current in redirects:
+                if current in visited:
+                    raise ValueError("This merge would create a graph alias cycle.")
+                visited.add(current)
+                current = redirects[current]
             db.execute("INSERT OR REPLACE INTO graph_aliases(case_id,alias_node_id,canonical_node_id,created_at,created_by) VALUES(?,?,?,?,?)",
                        (case_id, alias_node_id, canonical_node_id, datetime.now(timezone.utc).isoformat(), created_by))
         self.append_event(case_id, {"action": "graph_alias_merged", "alias_node_id": alias_node_id,
@@ -154,6 +170,18 @@ class Store:
     def graph_aliases(self, case_id):
         with self.connect() as db:
             return [dict(row) for row in db.execute("SELECT * FROM graph_aliases WHERE case_id=?", (case_id,))]
+
+    def remove_graph_alias(self, case_id, alias_node_id, removed_by=""):
+        with self.connect() as db:
+            row = db.execute("SELECT canonical_node_id FROM graph_aliases WHERE case_id=? AND alias_node_id=?",
+                             (case_id, alias_node_id)).fetchone()
+            if row is None:
+                return False
+            db.execute("DELETE FROM graph_aliases WHERE case_id=? AND alias_node_id=?",
+                       (case_id, alias_node_id))
+        self.append_event(case_id, {"action": "graph_alias_removed", "alias_node_id": alias_node_id,
+                                    "canonical_node_id": row["canonical_node_id"], "removed_by": removed_by})
+        return True
 
     def add_monitor_schedule(self, case_id, target, interval_seconds, created_by):
         import uuid
