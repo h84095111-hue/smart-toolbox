@@ -145,6 +145,7 @@ def collect_website(url):
     p=urlparse(url)
     if p.scheme not in ('http','https') or not p.hostname: raise ValueError('Enter a valid public http(s) URL.')
     if p.username or p.password: raise ValueError('URLs containing credentials are not accepted.')
+    if p.port not in (None, 80, 443): raise ValueError('Only standard HTTP and HTTPS ports are supported.')
     # Pin the validated DNS answer to the actual TCP connection.
     r=_get_public_pinned(url)
     raw=r.content[:MAX_PAGE_BYTES+1]
