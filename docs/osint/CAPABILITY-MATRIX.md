@@ -16,7 +16,10 @@ Status reflects code in this branch, not a marketing checklist.
 | Username lookup | Partial | Public username reference sources and analyst-triggered Maigret checks; no identity proof |
 | Email / phone | Partial | Format, DNS and provider-supported checks; HIBP is opt-in exact email lookup; no mailbox access or credential dumps |
 | Reverse image search / EXIF / geolocation | Partial | Local EXIF/GPS/SHA-256/dHash; external reverse-image portal handoff is manual, no automatic image upload/provider API |
-| Dark web / Telegram / forums | Planned | No access-control bypass, credential dumps or illicit marketplace collection |
+| Social media monitoring | Partial | Public Mastodon account timelines, Bluesky public post search and public RSS/Atom feeds (including YouTube channel feeds); no private networks or platform-wide coverage |
+| Telegram monitoring | Implemented | Official Bot API channel_post / edited_channel_post updates for analyst-specified public channel usernames; new updates only, one monitor cursor per bot; no history/backfill |
+| Dark-web monitoring | Partial | One exact v3 .onion page per monitor through local Tor SOCKS5H; no crawling, indexing, marketplace search, downloads or credential-dump collection |
+| Forums / private communities | Planned | No access-control bypass, private group collection or credential dumps |
 | Wayback | Implemented | CDX public endpoint |
 | Port/service/tech-stack fingerprinting | **Excluded by design** | No active scanning or fingerprinting |
 | Entity relationship graph | Implemented | Evidence-backed graph, analyst-added leads, explicit persisted alias merges; not automatic person resolution |
@@ -37,7 +40,7 @@ Status reflects code in this branch, not a marketing checklist.
 | Generic forced cancellation | Implemented | Collectors run in isolated worker processes; timeout/cancel terminates process trees where supported; trusted plugins are not a security sandbox |
 | Proxy / VPN / Tor | Partial | Optional HTTP/HTTPS CONNECT and SOCKS5 proxy routing; Tor must already run as a SOCKS endpoint; VPN is controlled by OS; not anonymity |
 | Rate limits | Implemented | Thread-safe per-host pacing; provider quotas still apply |
-| Scheduled monitoring | Partial | Persistent local schedules run passive scans while the desktop app is open; no background service or hosted scheduler |
+| Scheduled monitoring | Partial | Persistent local domain/IP/URL and social/Telegram/onion schedules run while the desktop app is open; no background service or hosted scheduler |
 | API/CLI/automation | Partial | Python helpers/CLI exist; no stable public API contract |
 | SIEM/SOAR/ticketing | Planned | Not implemented |
 | PDF / Word / STIX / CSV / JSON | Partial | Existing export helpers; signed bundle added; interoperability and validation work remains |
