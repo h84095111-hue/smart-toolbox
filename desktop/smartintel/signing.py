@@ -85,22 +85,61 @@ def signed_export(case: dict, evidence: list[dict], output_path: str | Path, *,
         archive.writestr("timestamp.tsr", timestamp_data)
         archive.writestr("timestamp_status.txt", timestamp_status + "\n")
     return {"path": str(output), "sha256": hashlib.sha256(output.read_bytes()).hexdigest(),
+            "manifest_sha256": hashlib.sha256(payload).hexdigest(),
+            "public_key_sha256": hashlib.sha256(public_pem).hexdigest(),
             "timestamp_status": timestamp_status,
             "signing_note": "Verify the Ed25519 signature against a public key obtained through an independent trusted channel. A TSA response is only trusted when independently validated against a trusted CA."}
 
 
-def verify_signed_export(path: str | Path) -> dict:
+def verify_signed_export(path: str | Path, *, tsa_ca_file: str = "") -> dict:
     from cryptography.hazmat.primitives import serialization
     from cryptography.exceptions import InvalidSignature
     with zipfile.ZipFile(path, "r") as archive:
         payload = archive.read("manifest.json")
         signature = archive.read("manifest.ed25519")
         public_pem = archive.read("signing_public_key.pem")
+        timestamp_data = archive.read("timestamp.tsr") if "timestamp.tsr" in archive.namelist() else b""
+        recorded_timestamp_status = (archive.read("timestamp_status.txt").decode("utf-8", errors="replace").strip()
+                                     if "timestamp_status.txt" in archive.namelist() else "not_present")
+        recorded_manifest_hash = (archive.read("manifest.sha256").decode("ascii", errors="replace").strip()
+                                  if "manifest.sha256" in archive.namelist() else "")
+    digest = hashlib.sha256(payload).hexdigest()
+    hash_matches = not recorded_manifest_hash or recorded_manifest_hash == digest
     public_key = serialization.load_pem_public_key(public_pem)
     try:
         public_key.verify(signature, payload)
-        valid = True
+        valid = bool(hash_matches)
     except InvalidSignature:
         valid = False
-    return {"valid": valid, "sha256": hashlib.sha256(payload).hexdigest(),
-            "note": "The embedded public key verifies internal consistency, but authenticity requires comparing its fingerprint with a trusted copy obtained independently."}
+    timestamp_result = "not_requested" if not timestamp_data else "received_unverified"
+    timestamp_valid = None
+    if tsa_ca_file and timestamp_data:
+        openssl = shutil.which("openssl")
+        if not openssl:
+            raise RuntimeError("OpenSSL is required to verify RFC 3161 timestamps.")
+        with tempfile.TemporaryDirectory(prefix="smartintel-tsa-verify-") as temp:
+            root = Path(temp)
+            data_file = root / "manifest.json"
+            reply_file = root / "timestamp.tsr"
+            data_file.write_bytes(payload)
+            reply_file.write_bytes(timestamp_data)
+            try:
+                subprocess.run([openssl, "ts", "-verify", "-data", str(data_file),
+                                "-in", str(reply_file), "-CAfile", str(Path(tsa_ca_file).resolve())],
+                               check=True, capture_output=True, timeout=20)
+                timestamp_valid = True
+                timestamp_result = "verified_against_configured_ca"
+            except subprocess.CalledProcessError:
+                timestamp_valid = False
+                timestamp_result = "verification_failed"
+    elif timestamp_data:
+        timestamp_result = recorded_timestamp_status or "received_unverified"
+    return {
+        "valid": valid,
+        "sha256": digest,
+        "public_key_sha256": hashlib.sha256(public_pem).hexdigest(),
+        "manifest_hash_matches": hash_matches,
+        "timestamp_status": timestamp_result,
+        "timestamp_valid": timestamp_valid,
+        "note": "The embedded public key proves internal consistency only. Authenticate its SHA-256 fingerprint independently. A timestamp is trusted only after verification against a trusted TSA CA.",
+    }
