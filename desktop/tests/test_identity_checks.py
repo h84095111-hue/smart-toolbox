@@ -118,7 +118,7 @@ def test_profile_parser_extracts_only_explicit_rel_me_pivots(monkeypatch):
             yield b'<html><head><title>Public page</title></head><body><a rel="me" href="https://social.example/@alice2">profile</a></body></html>'
         def close(self): pass
 
-    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: FakeResponse())
+    monkeypatch.setattr("smartintel.collectors.passive._get_public_pinned", lambda url: FakeResponse())
     result = fetch_public_profile_metadata("https://example.org/@alice")
     assert result["profile"]["title"] == "Public page"
     assert result["pivot_candidates"][0]["username"] == "alice2"
